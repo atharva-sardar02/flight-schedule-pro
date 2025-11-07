@@ -122,11 +122,14 @@ flight-schedule-pro/
 │   │   ├── cognito.yaml              # User pools
 │   │   ├── rds.yaml                  # PostgreSQL database
 │   │   ├── lambda.yaml               # Lambda functions
-│   │   ├── api-gateway.yaml          # REST API
+│   │   ├── api-gateway.yaml          # REST API + WebSocket API
+│   │   ├── s3.yaml                   # S3 bucket for frontend hosting
+│   │   ├── cloudfront.yaml           # CloudFront distribution for CDN
 │   │   ├── eventbridge.yaml          # Scheduler rules
 │   │   ├── ses.yaml                  # Email service
 │   │   ├── cloudwatch.yaml           # Alarms & dashboards
-│   │   └── secrets.yaml              # Secrets Manager
+│   │   ├── secrets.yaml              # Secrets Manager
+│   │   └── sns.yaml                   # SNS topic for alarm notifications
 │   └── scripts/
 │       ├── deploy-staging.sh
 │       ├── deploy-production.sh
@@ -250,8 +253,13 @@ flight-schedule-pro/
   - Files: `infrastructure/cloudformation/rds.yaml`
 - [ ] Create Lambda functions CloudFormation template
   - Files: `infrastructure/cloudformation/lambda.yaml`
-- [ ] Create API Gateway CloudFormation template
+- [ ] Create API Gateway CloudFormation template (REST API + WebSocket API)
   - Files: `infrastructure/cloudformation/api-gateway.yaml`
+  - Note: Must include both REST API for HTTP endpoints and WebSocket API for real-time notifications
+- [ ] Create S3 bucket CloudFormation template for frontend hosting
+  - Files: `infrastructure/cloudformation/s3.yaml`
+- [ ] Create CloudFront distribution CloudFormation template for frontend CDN
+  - Files: `infrastructure/cloudformation/cloudfront.yaml`
 - [ ] Create EventBridge scheduler CloudFormation template (10-min rule)
   - Files: `infrastructure/cloudformation/eventbridge.yaml`
 - [ ] Create SES email service CloudFormation template
@@ -260,12 +268,14 @@ flight-schedule-pro/
   - Files: `infrastructure/cloudformation/cloudwatch.yaml`
 - [ ] Create Secrets Manager template for API keys
   - Files: `infrastructure/cloudformation/secrets.yaml`
+- [ ] Create SNS topic CloudFormation template for CloudWatch alarm notifications
+  - Files: `infrastructure/cloudformation/sns.yaml`
 - [ ] Write deployment scripts
   - Files: `infrastructure/scripts/deploy-staging.sh`, `infrastructure/scripts/deploy-production.sh`, `infrastructure/scripts/setup-local.sh`
 - [ ] Test deployment to staging environment
 
 **Files Created:**
-- `infrastructure/cloudformation/*.yaml` (8 files)
+- `infrastructure/cloudformation/*.yaml` (11 files: cognito, rds, lambda, api-gateway, s3, cloudfront, eventbridge, ses, cloudwatch, secrets, sns)
 - `infrastructure/scripts/*.sh` (3 files)
 
 ---
