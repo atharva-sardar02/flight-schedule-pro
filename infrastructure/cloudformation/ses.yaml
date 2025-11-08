@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Flight Schedule Pro - SES Email Service'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - production
+    Description: Environment name
+  
+  ProjectName:
+    Type: String
+    Default: flight-schedule-pro
+    Description: Project name for resource naming
+
+  FromEmailAddress:
+    Type: String
+    Default: noreply@flightschedulepro.com
+    Description: From email address for notifications
+
+Resources:
+  # SES Email Identity
+  EmailIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref FromEmailAddress
+      DkimSigningAttributes:
+        NextSigningKeyLength: RSA_2048_BIT
+      FeedbackAttributes:
+        EmailForwardingEnabled: true
+
+  # SES Configuration Set
+  ConfigurationSet:
+    Type: AWS::SES::ConfigurationSet
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-config-set'
+
+  # Configuration Set Event Destination (for bounce/complaint tracking)
+  EventDestination:
+    Type: AWS::SES::ConfigurationSetEventDestination
+    Properties:
+      ConfigurationSetName: !Ref ConfigurationSet
+      EventDestination:
+        Name: CloudWatchDestination
+        Enabled: true
+        MatchingEventTypes:
+          - send
+          - reject
+          - bounce
+          - complaint
+          - delivery
+          - open
+          - click
+        CloudWatchDestination:
+          DimensionConfigurations:
+            - DimensionName: ses:configuration-set
+              DimensionValueSource: MESSAGE_TAG
+              DefaultDimensionValue: !Ref ConfigurationSet
+
+Outputs:
+  EmailIdentityArn:
+    Description: SES Email Identity ARN
+    Value: !GetAtt EmailIdentity.EmailIdentityArn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-EmailIdentityArn'
+
+  ConfigurationSetName:
+    Description: SES Configuration Set Name
+    Value: !Ref ConfigurationSet
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ConfigurationSetName'
+
+  FromEmailAddress:
+    Description: From Email Address
+    Value: !Ref FromEmailAddress
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-FromEmailAddress'
+
+

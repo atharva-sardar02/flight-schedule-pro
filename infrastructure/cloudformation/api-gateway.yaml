@@ -1,0 +1,211 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Flight Schedule Pro - API Gateway (REST + WebSocket)'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - production
+    Description: Environment name
+  
+  ProjectName:
+    Type: String
+    Default: flight-schedule-pro
+    Description: Project name for resource naming
+
+Resources:
+  # REST API
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-rest-api'
+      Description: REST API for Flight Schedule Pro
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Cognito Authorizer
+  CognitoAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-cognito-authorizer'
+      Type: COGNITO_USER_POOLS
+      IdentitySource: method.request.header.Authorization
+      RestApiId: !Ref RestApi
+      ProviderARNs:
+        - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-UserPoolArn'
+
+  # API Gateway Resource (proxy for Lambda)
+  ProxyResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: '{proxy+}'
+
+  # API Gateway Method
+  ProxyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ProxyResource
+      HttpMethod: ANY
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn:
+              Fn::ImportValue: !Sub '${ProjectName}-${Environment}-ApiHandlerFunctionArn'
+
+  # Lambda Permission for API Gateway
+  ApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Fn::ImportValue: !Sub '${ProjectName}-${Environment}-ApiHandlerFunctionArn'
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*'
+
+  # API Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ProxyMethod
+    Properties:
+      RestApiId: !Ref RestApi
+      StageName: !Ref Environment
+
+  # API Gateway Stage Settings
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: !Ref Environment
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref ApiDeployment
+      ThrottlingBurstLimit: 1000
+      ThrottlingRateLimit: 1000
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+
+  # WebSocket API
+  WebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-websocket-api'
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: '$request.body.action'
+      Tags:
+        Project: !Ref ProjectName
+        Environment: !Ref Environment
+
+  # WebSocket Integration
+  WebSocketIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+        - LambdaArn:
+            Fn::ImportValue: !Sub '${ProjectName}-${Environment}-ApiHandlerFunctionArn'
+
+  # WebSocket Routes
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $connect
+      AuthorizationType: NONE
+      Target: !Sub 'integrations/${WebSocketIntegration}'
+
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      Target: !Sub 'integrations/${WebSocketIntegration}'
+
+  DefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $default
+      AuthorizationType: NONE
+      Target: !Sub 'integrations/${WebSocketIntegration}'
+
+  # WebSocket Deployment
+  WebSocketDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - ConnectRoute
+      - DisconnectRoute
+      - DefaultRoute
+    Properties:
+      ApiId: !Ref WebSocketApi
+
+  # WebSocket Stage
+  WebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      StageName: !Ref Environment
+      DeploymentId: !Ref WebSocketDeployment
+      ApiId: !Ref WebSocketApi
+      DefaultRouteSettings:
+        DataTraceEnabled: true
+        LoggingLevel: INFO
+        ThrottlingBurstLimit: 500
+        ThrottlingRateLimit: 1000
+
+  # Lambda Permission for WebSocket API
+  WebSocketInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Fn::ImportValue: !Sub '${ProjectName}-${Environment}-ApiHandlerFunctionArn'
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*'
+
+Outputs:
+  RestApiId:
+    Description: REST API ID
+    Value: !Ref RestApi
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-RestApiId'
+
+  RestApiUrl:
+    Description: REST API URL
+    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-RestApiUrl'
+
+  WebSocketApiId:
+    Description: WebSocket API ID
+    Value: !Ref WebSocketApi
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-WebSocketApiId'
+
+  WebSocketUrl:
+    Description: WebSocket URL
+    Value: !Sub 'wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-WebSocketUrl'
+
+

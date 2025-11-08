@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Flight Schedule Pro - S3 Bucket for Frontend Hosting'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - production
+    Description: Environment name
+  
+  ProjectName:
+    Type: String
+    Default: flight-schedule-pro
+    Description: Project name for resource naming
+
+Resources:
+  # S3 Bucket for Frontend
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-frontend'
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # S3 Bucket Policy for CloudFront
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontAccess
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${FrontendBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/*'
+
+  # S3 Bucket for Access Logs
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-logs'
+      AccessControl: LogDeliveryWrite
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  FrontendBucketName:
+    Description: Frontend S3 Bucket Name
+    Value: !Ref FrontendBucket
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-FrontendBucketName'
+
+  FrontendBucketArn:
+    Description: Frontend S3 Bucket ARN
+    Value: !GetAtt FrontendBucket.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-FrontendBucketArn'
+
+  FrontendBucketDomainName:
+    Description: Frontend S3 Bucket Domain Name
+    Value: !GetAtt FrontendBucket.DomainName
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-FrontendBucketDomainName'
+
+  LogsBucketName:
+    Description: Logs S3 Bucket Name
+    Value: !Ref LogsBucket
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LogsBucketName'
+
+

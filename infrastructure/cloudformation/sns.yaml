@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Flight Schedule Pro - SNS Topics for Notifications'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - production
+    Description: Environment name
+  
+  ProjectName:
+    Type: String
+    Default: flight-schedule-pro
+    Description: Project name for resource naming
+
+  AlertEmail:
+    Type: String
+    Description: Email address for alert notifications
+    Default: ops@flightschedulepro.com
+
+Resources:
+  # SNS Topic for CloudWatch Alarms
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-${Environment}-alerts'
+      DisplayName: Flight Schedule Pro Alerts
+      Subscription:
+        - Endpoint: !Ref AlertEmail
+          Protocol: email
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # SNS Topic Policy
+  AlertTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudwatch.amazonaws.com
+            Action:
+              - SNS:Publish
+            Resource: !Ref AlertTopic
+      Topics:
+        - !Ref AlertTopic
+
+Outputs:
+  AlertTopicArn:
+    Description: SNS Alert Topic ARN
+    Value: !Ref AlertTopic
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-AlertTopic'
+
+  AlertTopicName:
+    Description: SNS Alert Topic Name
+    Value: !GetAtt AlertTopic.TopicName
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-AlertTopicName'
+
+

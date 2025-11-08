@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Flight Schedule Pro - EventBridge Scheduler for Weather Monitoring'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - production
+    Description: Environment name
+  
+  ProjectName:
+    Type: String
+    Default: flight-schedule-pro
+    Description: Project name for resource naming
+
+Resources:
+  # IAM Role for EventBridge to invoke Lambda
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-${Environment}-eventbridge-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  Fn::ImportValue: !Sub '${ProjectName}-${Environment}-WeatherMonitorFunctionArn'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # EventBridge Rule - 10 minute schedule
+  WeatherMonitorSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-weather-monitor-schedule'
+      Description: Trigger weather monitoring every 10 minutes
+      ScheduleExpression: 'rate(10 minutes)'
+      State: ENABLED
+      Targets:
+        - Arn:
+            Fn::ImportValue: !Sub '${ProjectName}-${Environment}-WeatherMonitorFunctionArn'
+          Id: WeatherMonitorLambda
+          RoleArn: !GetAtt EventBridgeRole.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+            MaximumEventAge: 3600
+
+  # Lambda Permission for EventBridge
+  EventBridgeInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Fn::ImportValue: !Sub '${ProjectName}-${Environment}-WeatherMonitorFunctionArn'
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WeatherMonitorSchedule.Arn
+
+Outputs:
+  WeatherMonitorScheduleArn:
+    Description: EventBridge Rule ARN
+    Value: !GetAtt WeatherMonitorSchedule.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-WeatherMonitorScheduleArn'
+
+

@@ -3,23 +3,32 @@
 ## Technology Stack
 
 ### Frontend
-**React 18+ with TypeScript**
+**React 18+ with TypeScript + Vite**
 - **Why:** Type safety for complex flight data structures, component reusability, strong ecosystem
+- **Build Tool:** Vite (replaced react-scripts for better performance and latest TypeScript support)
+- **UI Framework:** shadcn/ui (Radix UI primitives + Tailwind CSS)
 - **Key Libraries:**
   - `react-router-dom` (v6+): Client-side routing
   - `axios`: HTTP client for API calls
   - `@aws-amplify/auth`: Cognito integration
   - `date-fns`: Date manipulation and timezone handling
   - `tailwindcss`: Utility-first CSS framework
+  - `tailwindcss-animate`: Animation utilities
+  - `class-variance-authority`: Component variant management
+  - `clsx` + `tailwind-merge`: Conditional class utilities
   - `lucide-react`: Icon library
-  - `react-beautiful-dnd`: Drag-and-drop for preference ranking
-  - `recharts`: Dashboard metrics visualization
+  - `react-day-picker`: Date picker component
+  - `react-beautiful-dnd`: Drag-and-drop for preference ranking (to be added)
+  - `recharts`: Dashboard metrics visualization (to be added)
 
 ### Backend
 **TypeScript on AWS Lambda**
 - **Why:** Type safety across full stack, serverless scaling, pay-per-use pricing
 - **Runtime:** Node.js 18.x
+- **Local Development:** Express server with ts-node-dev (simpler than SAM CLI)
 - **Key Libraries:**
+  - `express`: Local development server
+  - `ts-node-dev`: Hot-reload TypeScript development
   - `@aws-sdk/client-ses`: Email notifications
   - `@aws-sdk/client-secrets-manager`: API key management
   - `@langchain/core` + `langchain`: AI workflow orchestration
@@ -133,30 +142,52 @@ PREFERENCE_DEADLINE_MIN_BEFORE_FLIGHT_MINUTES=30
 ```
 
 ### Local Development Workflow
-1. **Database Setup:**
+1. **Initial Setup:**
    ```bash
-   createdb flight_schedule_pro
-   psql -d flight_schedule_pro -f database/schema.sql
-   psql -d flight_schedule_pro -f database/migrations/*.sql
-   psql -d flight_schedule_pro -f database/seeds/dev_users.sql
+   # Install all dependencies
+   npm run install:all
+   
+   # Or use setup script
+   ./infrastructure/scripts/setup-local.sh
    ```
 
-2. **Backend Setup:**
+2. **Database Setup:**
+   ```bash
+   # Create database and run migrations
+   npm run db:setup
+   
+   # Or manually:
+   createdb flight_schedule_pro
+   npm run db:migrate
+   npm run db:seed
+   ```
+
+3. **Backend Setup:**
    ```bash
    cd backend
    npm install
+   npm run dev  # Express dev server on localhost:3001 (ts-node-dev)
    npm run build  # Compile TypeScript
-   npm run test   # Run unit tests
+   npm test   # Run unit tests
    ```
 
-3. **Frontend Setup:**
+4. **Frontend Setup:**
    ```bash
    cd frontend
    npm install
-   npm run start  # Development server on localhost:3000
+   npm run dev  # Vite dev server on localhost:3000
+   npm run build  # Production build
+   npm test  # Run tests (Vitest)
    ```
 
-4. **Lambda Local Testing:**
+5. **Run Both:**
+   ```bash
+   # From root directory
+   npm run dev:frontend  # Terminal 1
+   npm run dev:backend   # Terminal 2
+   ```
+
+6. **Lambda Local Testing:**
    ```bash
    # Use SAM CLI or Serverless Framework for local Lambda invocation
    sam local invoke weatherMonitor -e events/test-event.json
@@ -243,31 +274,44 @@ stages:
 
 ### Infrastructure as Code
 - **Tool:** AWS CloudFormation (YAML templates)
-- **Stack Structure:**
-  - `cognito.yaml`: User pools and app clients
-  - `rds.yaml`: PostgreSQL database
-  - `lambda.yaml`: All Lambda functions
-  - `api-gateway.yaml`: REST and WebSocket APIs
-  - `eventbridge.yaml`: Scheduled rules
-  - `ses.yaml`: Email configuration
-  - `cloudwatch.yaml`: Alarms and dashboards
-  - `secrets.yaml`: Secrets Manager resources
+- **Location:** `infrastructure/cloudformation/`
+- **Stack Structure (11 templates):**
+  - `cognito.yaml`: User pools, groups, identity pool
+  - `rds.yaml`: PostgreSQL database with VPC, subnets, security groups
+  - `lambda.yaml`: Three Lambda functions (weather monitor, reschedule engine, API handler)
+  - `api-gateway.yaml`: REST and WebSocket APIs with Cognito authorizers
+  - `eventbridge.yaml`: Scheduled rule for 10-minute weather monitoring
+  - `ses.yaml`: Email service configuration
+  - `cloudwatch.yaml`: Alarms and dashboards for monitoring
+  - `secrets.yaml`: Secrets Manager for API keys and credentials
+  - `sns.yaml`: Alert notification topics
+  - `s3.yaml`: Frontend hosting bucket + logs bucket
+  - `cloudfront.yaml`: CDN distribution for frontend
 
 ### Deployment Scripts
+**Location:** `infrastructure/scripts/`
+
 ```bash
+# Local development setup
+./infrastructure/scripts/setup-local.sh
+# - Checks prerequisites (Node.js, PostgreSQL, AWS CLI)
+# - Installs all dependencies
+# - Creates database and runs migrations
+# - Loads seed data
+
 # Staging deployment
 ./infrastructure/scripts/deploy-staging.sh
-# - Validates CloudFormation templates
-# - Deploys infrastructure stack
-# - Runs database migrations
-# - Deploys Lambda functions
-# - Deploys frontend to S3
+# - Validates all CloudFormation templates
+# - Deploys infrastructure stacks in correct order
+# - Requires environment variables: DB_MASTER_PASSWORD, API keys
+# - Includes error handling and logging
 
 # Production deployment
 ./infrastructure/scripts/deploy-production.sh
-# - Same as staging but with production parameters
-# - Blue/green deployment for zero downtime
-# - Automatic rollback on health check failure
+# - Pre-deployment checks (Git status, branch validation)
+# - Uses CloudFormation change sets for safety
+# - Manual approval steps
+# - Enhanced monitoring and rollback capabilities
 ```
 
 ### Blue/Green Deployment (Lambda)

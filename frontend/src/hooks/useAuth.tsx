@@ -1,0 +1,123 @@
+/**
+ * useAuth Hook
+ * Custom hook for authentication state and operations
+ */
+
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { User, AuthTokens, LoginCredentials, RegisterData, AuthContextType } from '../types/user';
+import AuthService from '../services/auth';
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export function AuthProvider({ children }: AuthProviderProps) {
+  const [user, setUser] = useState<User | null>(null);
+  const [tokens, setTokens] = useState<AuthTokens | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Initialize auth state on mount
+  useEffect(() => {
+    initializeAuth();
+  }, []);
+
+  const initializeAuth = async () => {
+    try {
+      if (AuthService.isAuthenticated()) {
+        const currentUser = await AuthService.getCurrentUser();
+        setUser(currentUser);
+
+        // Set tokens from localStorage
+        const accessToken = AuthService.getAccessToken();
+        const refreshToken = AuthService.getRefreshToken();
+        const idToken = AuthService.getIdToken();
+
+        if (accessToken && refreshToken && idToken) {
+          setTokens({
+            accessToken,
+            refreshToken,
+            idToken,
+            expiresIn: 3600, // Default value
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to initialize auth', error);
+      AuthService.clearTokens();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const login = async (credentials: LoginCredentials) => {
+    try {
+      const response = await AuthService.login(credentials);
+      setUser(response.user);
+      setTokens(response.tokens);
+    } catch (error) {
+      console.error('Login failed', error);
+      throw error;
+    }
+  };
+
+  const register = async (data: RegisterData) => {
+    try {
+      await AuthService.register(data);
+      // After registration, user needs to log in
+    } catch (error) {
+      console.error('Registration failed', error);
+      throw error;
+    }
+  };
+
+  const logout = () => {
+    AuthService.logout();
+    setUser(null);
+    setTokens(null);
+  };
+
+  const refreshToken = async () => {
+    try {
+      const newTokens = await AuthService.refreshToken();
+      setTokens(newTokens);
+
+      // Refresh user data
+      const currentUser = await AuthService.getCurrentUser();
+      setUser(currentUser);
+    } catch (error) {
+      console.error('Token refresh failed', error);
+      logout();
+      throw error;
+    }
+  };
+
+  const value: AuthContextType = {
+    user,
+    tokens,
+    isAuthenticated: !!user,
+    isLoading,
+    login,
+    register,
+    logout,
+    refreshToken,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+/**
+ * Hook to access auth context
+ */
+export function useAuth(): AuthContextType {
+  const context = useContext(AuthContext);
+
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+
+  return context;
+}
+
+

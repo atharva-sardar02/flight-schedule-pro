@@ -13,7 +13,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Frontend Layer                           │
-│  React + TypeScript (S3/CloudFront)                             │
+│  React + Vite + shadcn/ui (S3/CloudFront)                      │
 │  - Dashboard, Booking, Availability Calendar, Preferences        │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ HTTPS / WebSocket
@@ -27,11 +27,11 @@
 ┌──────────────────────────▼──────────────────────────────────────┐
 │                      Lambda Functions                            │
 │  ┌─────────────────┐  ┌──────────────────┐  ┌────────────────┐ │
-│  │ API Functions   │  │ Scheduler        │  │ AI Engine      │ │
-│  │ - auth.ts       │  │ - weatherMonitor │  │ - reschedule   │ │
-│  │ - bookings.ts   │  │   (10-min cycle) │  │ - validator    │ │
-│  │ - availability  │  │                  │  │ - conflict     │ │
-│  │ - preferences   │  │                  │  │   detector     │ │
+│  │ API Handler     │  │ Weather Monitor  │  │ Reschedule     │ │
+│  │ - auth.ts       │  │ - weatherMonitor │  │ Engine         │ │
+│  │ - bookings.ts   │  │   (10-min cycle) │  │ - reschedule   │ │
+│  │ - availability  │  │                  │  │ - validator    │ │
+│  │ - preferences   │  │                  │  │ - conflict     │ │
 │  └─────────────────┘  └──────────────────┘  └────────────────┘ │
 └──────────┬───────────────────┬───────────────────┬──────────────┘
            │                   │                   │
@@ -40,9 +40,12 @@
 │  - Users        │  │  - Cognito       │  │ - OpenWeatherMap    │
 │  - Bookings     │  │  - SES (email)   │  │ - WeatherAPI.com    │
 │  - Availability │  │  - Secrets Mgr   │  │ - Anthropic (AI)    │
-│  - Audit Logs   │  │  - EventBridge   │  │                     │
+│  - Notifications│  │  - EventBridge   │  │                     │
+│  - Audit Logs   │  │  - SNS (alerts)  │  │                     │
 └─────────────────┘  └──────────────────┘  └─────────────────────┘
 ```
+
+**Infrastructure Status:** All CloudFormation templates created and ready for deployment
 
 ## Key Architectural Patterns
 

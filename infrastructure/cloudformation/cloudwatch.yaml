@@ -1,0 +1,189 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Flight Schedule Pro - CloudWatch Alarms and Dashboards'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - production
+    Description: Environment name
+  
+  ProjectName:
+    Type: String
+    Default: flight-schedule-pro
+    Description: Project name for resource naming
+
+  AlarmEmail:
+    Type: String
+    Description: Email address for alarm notifications
+    Default: ops@flightschedulepro.com
+
+Resources:
+  # Lambda Error Alarm - Weather Monitor
+  WeatherMonitorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-weather-monitor-errors'
+      AlarmDescription: Weather Monitor Lambda errors exceed 3%
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub '${ProjectName}-${Environment}-weather-monitor'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-AlertTopic'
+
+  # Lambda Error Alarm - API Handler
+  ApiHandlerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-api-handler-errors'
+      AlarmDescription: API Handler Lambda errors exceed 3%
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub '${ProjectName}-${Environment}-api-handler'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-AlertTopic'
+
+  # API Gateway 5xx Errors Alarm
+  ApiGateway5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-api-gateway-5xx'
+      AlarmDescription: API Gateway 5xx errors exceed 5%
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub '${ProjectName}-${Environment}-rest-api'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-AlertTopic'
+
+  # RDS CPU Utilization Alarm
+  RDSCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-rds-cpu-high'
+      AlarmDescription: RDS CPU utilization exceeds 80%
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Sub '${ProjectName}-${Environment}-db'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-AlertTopic'
+
+  # RDS Database Connections Alarm
+  RDSConnectionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-rds-connections-high'
+      AlarmDescription: RDS database connections exceed 80
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Sub '${ProjectName}-${Environment}-db'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-AlertTopic'
+
+  # CloudWatch Dashboard
+  MainDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${ProjectName}-${Environment}-dashboard'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Weather Monitor"}],
+                  [".", "Errors", {"stat": "Sum", "label": "Errors"}],
+                  [".", "Duration", {"stat": "Average", "label": "Duration"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Lambda - Weather Monitor",
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/ApiGateway", "Count", {"stat": "Sum"}],
+                  [".", "4XXError", {"stat": "Sum"}],
+                  [".", "5XXError", {"stat": "Sum"}],
+                  [".", "Latency", {"stat": "Average"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "API Gateway Metrics",
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/RDS", "CPUUtilization", {"stat": "Average"}],
+                  [".", "DatabaseConnections", {"stat": "Average"}],
+                  [".", "FreeableMemory", {"stat": "Average"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "RDS Performance",
+                "yAxis": {"left": {"min": 0}}
+              }
+            }
+          ]
+        }
+
+Outputs:
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${MainDashboard}'
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-DashboardURL'
+
+

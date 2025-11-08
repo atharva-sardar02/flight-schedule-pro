@@ -1,0 +1,247 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Flight Schedule Pro - RDS PostgreSQL Database'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - production
+    Description: Environment name
+  
+  ProjectName:
+    Type: String
+    Default: flight-schedule-pro
+    Description: Project name for resource naming
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    Description: Database instance type
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+
+  DBAllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    MaxValue: 100
+    Description: Allocated storage size in GB
+
+  DBName:
+    Type: String
+    Default: flight_schedule_pro
+    Description: Database name
+
+  DBMasterUsername:
+    Type: String
+    Default: postgres
+    Description: Database master username
+    NoEcho: true
+
+  DBMasterPassword:
+    Type: String
+    NoEcho: true
+    Description: Database master password (min 8 chars)
+    MinLength: 8
+
+Resources:
+  # VPC for RDS
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-vpc'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Private Subnets for RDS
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-private-subnet-1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-private-subnet-2'
+
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${ProjectName}-${Environment}-db-subnet-group'
+      DBSubnetGroupDescription: Subnet group for RDS PostgreSQL
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-db-subnet-group'
+
+  # Security Group for RDS
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-${Environment}-db-sg'
+      GroupDescription: Security group for RDS PostgreSQL
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: Allow Lambda access
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-db-sg'
+
+  # Security Group for Lambda (to access RDS)
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-${Environment}-lambda-sg'
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          DestinationSecurityGroupId: !Ref DBSecurityGroup
+          Description: Access to RDS
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS for external APIs
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-lambda-sg'
+
+  # DB Parameter Group
+  DBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      DBParameterGroupName: !Sub '${ProjectName}-${Environment}-postgres-params'
+      Description: PostgreSQL parameter group
+      Family: postgres14
+      Parameters:
+        max_connections: '100'
+        shared_buffers: '256MB'
+        effective_cache_size: '1GB'
+        maintenance_work_mem: '64MB'
+        checkpoint_completion_target: '0.9'
+        wal_buffers: '16MB'
+        default_statistics_target: '100'
+        random_page_cost: '1.1'
+        effective_io_concurrency: '200'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-postgres-params'
+
+  # RDS PostgreSQL Instance
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub '${ProjectName}-${Environment}-db'
+      DBName: !Ref DBName
+      Engine: postgres
+      EngineVersion: '14.10'
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref DBAllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Ref DBMasterPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      DBParameterGroupName: !Ref DBParameterGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      EnableCloudwatchLogsExports:
+        - postgresql
+        - upgrade
+      DeletionProtection: !If [IsProduction, true, false]
+      MultiAZ: !If [IsProduction, true, false]
+      PubliclyAccessible: false
+      AutoMinorVersionUpgrade: true
+      CopyTagsToSnapshot: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-db'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, production]
+
+Outputs:
+  DBInstanceEndpoint:
+    Description: RDS instance endpoint
+    Value: !GetAtt DBInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-DBEndpoint'
+
+  DBInstancePort:
+    Description: RDS instance port
+    Value: !GetAtt DBInstance.Endpoint.Port
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-DBPort'
+
+  DBName:
+    Description: Database name
+    Value: !Ref DBName
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-DBName'
+
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-VPCId'
+
+  LambdaSecurityGroupId:
+    Description: Lambda Security Group ID
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LambdaSecurityGroupId'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-PrivateSubnet1Id'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-PrivateSubnet2Id'
+
+

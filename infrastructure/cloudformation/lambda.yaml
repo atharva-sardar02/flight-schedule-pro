@@ -1,0 +1,223 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Flight Schedule Pro - Lambda Functions'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - production
+    Description: Environment name
+  
+  ProjectName:
+    Type: String
+    Default: flight-schedule-pro
+    Description: Project name for resource naming
+
+  LambdaCodeBucket:
+    Type: String
+    Description: S3 bucket containing Lambda code
+    Default: ''
+
+  LambdaCodeKey:
+    Type: String
+    Description: S3 key for Lambda code zip file
+    Default: lambda-code.zip
+
+Resources:
+  # IAM Role for Lambda Execution
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-${Environment}-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LambdaPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-*'
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${ProjectName}/${Environment}/*'
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - rds:DescribeDBInstances
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Weather Monitor Lambda (EventBridge triggered)
+  WeatherMonitorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-${Environment}-weather-monitor'
+      Runtime: nodejs18.x
+      Handler: index.weatherMonitorHandler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 512
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          DB_HOST:
+            Fn::ImportValue: !Sub '${ProjectName}-${Environment}-DBEndpoint'
+          DB_PORT:
+            Fn::ImportValue: !Sub '${ProjectName}-${Environment}-DBPort'
+          DB_NAME:
+            Fn::ImportValue: !Sub '${ProjectName}-${Environment}-DBName'
+      VpcConfig:
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-LambdaSecurityGroupId'
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-PrivateSubnet1Id'
+          - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-PrivateSubnet2Id'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # AI Reschedule Engine Lambda
+  RescheduleEngineFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-${Environment}-reschedule-engine'
+      Runtime: nodejs18.x
+      Handler: index.rescheduleEngineHandler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 1024
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          DB_HOST:
+            Fn::ImportValue: !Sub '${ProjectName}-${Environment}-DBEndpoint'
+          DB_PORT:
+            Fn::ImportValue: !Sub '${ProjectName}-${Environment}-DBPort'
+          DB_NAME:
+            Fn::ImportValue: !Sub '${ProjectName}-${Environment}-DBName'
+      VpcConfig:
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-LambdaSecurityGroupId'
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-PrivateSubnet1Id'
+          - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-PrivateSubnet2Id'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # API Handler Lambda (for REST API)
+  ApiHandlerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-${Environment}-api-handler'
+      Runtime: nodejs18.x
+      Handler: index.apiHandler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 512
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          DB_HOST:
+            Fn::ImportValue: !Sub '${ProjectName}-${Environment}-DBEndpoint'
+          DB_PORT:
+            Fn::ImportValue: !Sub '${ProjectName}-${Environment}-DBPort'
+          DB_NAME:
+            Fn::ImportValue: !Sub '${ProjectName}-${Environment}-DBName'
+          USER_POOL_ID:
+            Fn::ImportValue: !Sub '${ProjectName}-${Environment}-UserPoolId'
+      VpcConfig:
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-LambdaSecurityGroupId'
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-PrivateSubnet1Id'
+          - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-PrivateSubnet2Id'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Log Groups
+  WeatherMonitorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${WeatherMonitorFunction}'
+      RetentionInDays: 30
+
+  RescheduleEngineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${RescheduleEngineFunction}'
+      RetentionInDays: 30
+
+  ApiHandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ApiHandlerFunction}'
+      RetentionInDays: 30
+
+Outputs:
+  LambdaExecutionRoleArn:
+    Description: Lambda Execution Role ARN
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LambdaExecutionRoleArn'
+
+  WeatherMonitorFunctionArn:
+    Description: Weather Monitor Lambda Function ARN
+    Value: !GetAtt WeatherMonitorFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-WeatherMonitorFunctionArn'
+
+  RescheduleEngineFunctionArn:
+    Description: Reschedule Engine Lambda Function ARN
+    Value: !GetAtt RescheduleEngineFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-RescheduleEngineFunctionArn'
+
+  ApiHandlerFunctionArn:
+    Description: API Handler Lambda Function ARN
+    Value: !GetAtt ApiHandlerFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ApiHandlerFunctionArn'
+
+

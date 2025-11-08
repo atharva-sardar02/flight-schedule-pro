@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Flight Schedule Pro - Cognito User Pool for Authentication'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - production
+    Description: Environment name
+  
+  ProjectName:
+    Type: String
+    Default: flight-schedule-pro
+    Description: Project name for resource naming
+
+Resources:
+  # Cognito User Pool
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub '${ProjectName}-${Environment}-user-pool'
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      UsernameConfiguration:
+        CaseSensitive: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 7
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: false
+        - Name: given_name
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: family_name
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: phone_number
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+        - Name: role
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+      EmailConfiguration:
+        EmailSendingAccount: COGNITO_DEFAULT
+      MfaConfiguration: OPTIONAL
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
+      UserAttributeUpdateSettings:
+        AttributesRequireVerificationBeforeUpdate:
+          - email
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UserPoolTags:
+        Project: !Ref ProjectName
+        Environment: !Ref Environment
+
+  # User Pool Client (for frontend application)
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub '${ProjectName}-${Environment}-client'
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      RefreshTokenValidity: 30
+      AccessTokenValidity: 12
+      IdTokenValidity: 12
+      TokenValidityUnits:
+        RefreshToken: days
+        AccessToken: hours
+        IdToken: hours
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs:
+        - http://localhost:3000/callback
+        - !Sub 'https://${Environment}.flightschedulepro.com/callback'
+      LogoutURLs:
+        - http://localhost:3000/
+        - !Sub 'https://${Environment}.flightschedulepro.com/'
+
+  # User Groups
+  StudentsGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Students
+      Description: Student pilots
+      UserPoolId: !Ref UserPool
+      Precedence: 3
+
+  InstructorsGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Instructors
+      Description: Flight instructors
+      UserPoolId: !Ref UserPool
+      Precedence: 2
+
+  AdminsGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Admins
+      Description: System administrators
+      UserPoolId: !Ref UserPool
+      Precedence: 1
+
+  # Identity Pool for AWS resource access (if needed)
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub '${ProjectName}_${Environment}_identity_pool'
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !GetAtt UserPool.ProviderName
+
+Outputs:
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-UserPoolId'
+
+  UserPoolArn:
+    Description: Cognito User Pool ARN
+    Value: !GetAtt UserPool.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-UserPoolArn'
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref UserPoolClient
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-UserPoolClientId'
+
+  IdentityPoolId:
+    Description: Cognito Identity Pool ID
+    Value: !Ref IdentityPool
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-IdentityPoolId'
+
+  UserPoolProviderName:
+    Description: Cognito User Pool Provider Name
+    Value: !GetAtt UserPool.ProviderName
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-UserPoolProviderName'
+
+
