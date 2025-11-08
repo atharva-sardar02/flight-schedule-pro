@@ -7,6 +7,7 @@ import { handler as authHandler } from './functions/api/auth';
 import { handler as bookingsHandler } from './functions/api/bookings';
 import { availabilityHandler } from './functions/api/availability';
 import { rescheduleHandler } from './functions/api/reschedule';
+import { preferencesHandler } from './functions/api/preferences';
 
 // Load environment variables from .env file in project root
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -78,7 +79,11 @@ app.get('/api', (req, res) => {
       'GET /reschedule/options/:bookingId - Get reschedule options',
       'POST /reschedule/preferences - Submit preferences',
       'GET /reschedule/preferences/:bookingId - Get preferences',
-      'POST /reschedule/confirm/:bookingId - Confirm reschedule'
+      'POST /reschedule/confirm/:bookingId - Confirm reschedule',
+      'POST /preferences/submit - Submit preference ranking',
+      'GET /preferences/booking/:bookingId - Get all preferences',
+      'GET /preferences/my/:bookingId - Get my preference',
+      'POST /preferences/escalate/:bookingId - Manual escalation (admin)'
     ]
   });
 });
@@ -237,6 +242,49 @@ app.use('/reschedule/:action?/:bookingId?', async (req, res) => {
     res.send(result.body);
   } catch (error) {
     logger.error('Reschedule route error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Preferences Routes
+app.use('/preferences/:action?/:bookingId?', async (req, res) => {
+  try {
+    let path = '/preferences';
+    if (req.params.action) {
+      path += `/${req.params.action}`;
+      if (req.params.bookingId) {
+        path += `/${req.params.bookingId}`;
+      }
+    }
+
+    const event = {
+      httpMethod: req.method,
+      path: path,
+      pathParameters: req.params.bookingId ? { bookingId: req.params.bookingId } : null,
+      queryStringParameters: req.query,
+      headers: req.headers as { [key: string]: string },
+      body: req.body ? JSON.stringify(req.body) : null,
+      isBase64Encoded: false,
+      requestContext: {},
+      resource: '',
+      stageVariables: null,
+      multiValueHeaders: {},
+      multiValueQueryStringParameters: null
+    };
+
+    const result = await preferencesHandler(event as any);
+    
+    res.status(result.statusCode);
+    
+    if (result.headers) {
+      Object.entries(result.headers).forEach(([key, value]) => {
+        res.setHeader(key, value as string);
+      });
+    }
+    
+    res.send(result.body);
+  } catch (error) {
+    logger.error('Preferences route error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
