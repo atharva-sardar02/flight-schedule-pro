@@ -162,7 +162,7 @@ main() {
     deploy_stack \
         "${PROJECT_NAME}-${ENVIRONMENT}-secrets" \
         "infrastructure/cloudformation/secrets.yaml" \
-        "ParameterKey=Environment,ParameterValue=$ENVIRONMENT ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=OpenWeatherMapApiKey,ParameterValue=$OPENWEATHERMAP_API_KEY ParameterKey=WeatherApiComKey,ParameterValue=$WEATHERAPI_COM_KEY ParameterKey=AnthropicApiKey,ParameterValue=$ANTHROPIC_API_KEY"
+        "ParameterKey=Environment,ParameterValue=$ENVIRONMENT ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=OpenWeatherMapApiKey,ParameterValue=$OPENWEATHERMAP_API_KEY ParameterKey=WeatherApiComKey,ParameterValue=${WEATHERAPI_COM_KEY:-} ParameterKey=OpenAIApiKey,ParameterValue=$OPENAI_API_KEY"
     
     log_info "Step 3: Deploy Cognito"
     deploy_stack \

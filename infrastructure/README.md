@@ -47,7 +47,7 @@ export OPENWEATHERMAP_API_KEY='your-openweathermap-key'
 export WEATHERAPI_COM_KEY='your-weatherapi-key'
 
 # AI Service
-export ANTHROPIC_API_KEY='your-anthropic-key'
+export OPENAI_API_KEY='your-openai-key'
 
 # AWS Configuration
 export AWS_REGION='us-east-1'
@@ -84,7 +84,7 @@ export AWS_PROFILE='default'
 export DB_MASTER_PASSWORD='YourPassword'
 export OPENWEATHERMAP_API_KEY='your-key'
 export WEATHERAPI_COM_KEY='your-key'
-export ANTHROPIC_API_KEY='your-key'
+export OPENAI_API_KEY='your-key'
 
 # Run deployment
 ./infrastructure/scripts/deploy-staging.sh
@@ -99,7 +99,7 @@ export AWS_PROFILE='production'
 export DB_MASTER_PASSWORD='YourProductionPassword'
 export OPENWEATHERMAP_API_KEY='your-key'
 export WEATHERAPI_COM_KEY='your-key'
-export ANTHROPIC_API_KEY='your-key'
+export OPENAI_API_KEY='your-key'
 
 # Run deployment with approval steps
 ./infrastructure/scripts/deploy-production.sh

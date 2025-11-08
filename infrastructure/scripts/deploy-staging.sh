@@ -88,18 +88,18 @@ main() {
     # Deploy Secrets Manager
     log_warn "Please ensure API keys are set in environment variables:"
     log_warn "  - OPENWEATHERMAP_API_KEY"
-    log_warn "  - WEATHERAPI_COM_KEY"
-    log_warn "  - ANTHROPIC_API_KEY"
+    log_warn "  - WEATHERAPI_COM_KEY (optional)"
+    log_warn "  - OPENAI_API_KEY"
     
-    if [ -z "$OPENWEATHERMAP_API_KEY" ] || [ -z "$WEATHERAPI_COM_KEY" ] || [ -z "$ANTHROPIC_API_KEY" ]; then
-        log_error "API keys not set. Please export them and run again."
+    if [ -z "$OPENWEATHERMAP_API_KEY" ] || [ -z "$OPENAI_API_KEY" ]; then
+        log_error "Required API keys not set. Please export OPENWEATHERMAP_API_KEY and OPENAI_API_KEY and run again."
         exit 1
     fi
     
     deploy_stack \
         "${PROJECT_NAME}-${ENVIRONMENT}-secrets" \
         "infrastructure/cloudformation/secrets.yaml" \
-        "Environment=$ENVIRONMENT ProjectName=$PROJECT_NAME OpenWeatherMapApiKey=$OPENWEATHERMAP_API_KEY WeatherApiComKey=$WEATHERAPI_COM_KEY AnthropicApiKey=$ANTHROPIC_API_KEY"
+        "Environment=$ENVIRONMENT ProjectName=$PROJECT_NAME OpenWeatherMapApiKey=$OPENWEATHERMAP_API_KEY WeatherApiComKey=${WEATHERAPI_COM_KEY:-} OpenAIApiKey=$OPENAI_API_KEY"
     
     # Deploy Cognito
     deploy_stack \

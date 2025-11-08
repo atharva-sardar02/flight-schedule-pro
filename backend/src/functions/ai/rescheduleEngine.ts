@@ -6,7 +6,7 @@
 
 import { Pool } from 'pg';
 import { StateGraph, END, START } from '@langchain/langgraph';
-import { ChatAnthropic } from '@langchain/anthropic';
+import { ChatOpenAI } from '@langchain/openai';
 import { addDays, addHours, isWithinInterval, parse, format } from 'date-fns';
 import { WeatherValidator } from './weatherValidator';
 import { WeatherService } from '../../services/weatherService';
@@ -57,7 +57,7 @@ export class RescheduleEngine {
   private weatherValidator: WeatherValidator;
   private availabilityService: AvailabilityService;
   private rescheduleOptionsService: RescheduleOptionsService;
-  private llm: ChatAnthropic;
+  private llm: ChatOpenAI;
 
   constructor(pool: Pool) {
     this.pool = pool;
@@ -66,12 +66,12 @@ export class RescheduleEngine {
     this.availabilityService = new AvailabilityService(pool);
     this.rescheduleOptionsService = new RescheduleOptionsService(pool);
     
-    // Initialize Anthropic Claude
-    this.llm = new ChatAnthropic({
-      modelName: 'claude-3-sonnet-20240229',
+    // Initialize OpenAI ChatGPT
+    this.llm = new ChatOpenAI({
+      modelName: 'gpt-4o-mini', // or 'gpt-4' for better performance
       temperature: 0.3,
       maxTokens: 2000,
-      apiKey: process.env.ANTHROPIC_API_KEY,
+      apiKey: process.env.OPENAI_API_KEY,
     });
   }
 

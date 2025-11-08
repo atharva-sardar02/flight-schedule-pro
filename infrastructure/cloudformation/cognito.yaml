@@ -60,10 +60,10 @@ Resources:
       EmailConfiguration:
         EmailSendingAccount: COGNITO_DEFAULT
       # MFA Configuration: OPTIONAL for all users, but can be enforced per group
+      # Note: SMS_MFA requires SNS role configuration. Using SOFTWARE_TOKEN_MFA only for now.
       MfaConfiguration: OPTIONAL
       EnabledMfas:
         - SOFTWARE_TOKEN_MFA
-        - SMS_MFA
       UserAttributeUpdateSettings:
         AttributesRequireVerificationBeforeUpdate:
           - email

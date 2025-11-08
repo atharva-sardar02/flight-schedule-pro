@@ -99,6 +99,28 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-db-subnet-group'
 
+  # Security Group for Lambda (to access RDS) - Created first to break circular dependency
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-${Environment}-lambda-sg'
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0
+          Description: Access to RDS
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS for external APIs
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-lambda-sg'
+
   # Security Group for RDS
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -115,28 +137,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-db-sg'
-
-  # Security Group for Lambda (to access RDS)
-  LambdaSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub '${ProjectName}-${Environment}-lambda-sg'
-      GroupDescription: Security group for Lambda functions
-      VpcId: !Ref VPC
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          DestinationSecurityGroupId: !Ref DBSecurityGroup
-          Description: Access to RDS
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: HTTPS for external APIs
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-lambda-sg'
 
   # DB Parameter Group
   DBParameterGroup:
