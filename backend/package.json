@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
-    "dev": "sam local start-api",
+    "dev": "ts-node-dev --respawn --transpile-only src/dev-server.ts",
+    "dev:build": "npm run build && npm run watch",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.145",
+    "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.9.0",
     "@types/pg": "^8.11.10",
@@ -40,10 +42,12 @@
     "eslint": "^9.14.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
+    "express": "^4.21.1",
     "jest": "^29.7.0",
     "prettier": "^3.3.3",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
     "typescript": "^5.6.3"
   },
   "engines": {

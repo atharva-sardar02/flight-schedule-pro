@@ -27,6 +27,9 @@
     "lint:fix": "npm run lint:backend -- --fix && npm run lint:frontend -- --fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "db:migrate": "echo 'Run: psql -d flight_schedule_pro -f database/migrations/001_create_users_table.sql && psql -d flight_schedule_pro -f database/migrations/002_create_bookings_table.sql && psql -d flight_schedule_pro -f database/migrations/003_create_availability_tables.sql && psql -d flight_schedule_pro -f database/migrations/004_create_notifications_table.sql && psql -d flight_schedule_pro -f database/migrations/005_create_audit_log_table.sql && psql -d flight_schedule_pro -f database/migrations/006_create_indexes.sql'",
+    "db:seed": "echo 'Run: psql -d flight_schedule_pro -f database/seeds/dev_users.sql && psql -d flight_schedule_pro -f database/seeds/dev_bookings.sql && psql -d flight_schedule_pro -f database/seeds/dev_availability.sql'",
+    "db:setup": "echo 'Run: createdb flight_schedule_pro && npm run db:migrate && npm run db:seed'",
     "deploy:staging": "./infrastructure/scripts/deploy-staging.sh",
     "deploy:production": "./infrastructure/scripts/deploy-production.sh",
     "clean": "rm -rf node_modules frontend/node_modules backend/node_modules frontend/build backend/dist"
