@@ -17,10 +17,12 @@ class WeatherCache {
 
   /**
    * Generate cache key from coordinates
+   * Optimized: Rounds to 0.01 degree (~1km) for better cache hit rate
    */
   private getCacheKey(coords: Coordinates, provider?: string): string {
-    const lat = coords.latitude.toFixed(4);
-    const lon = coords.longitude.toFixed(4);
+    // Round to 0.01 degree (~1km) for better cache hit rate on nearby locations
+    const lat = Math.round(coords.latitude * 100) / 100;
+    const lon = Math.round(coords.longitude * 100) / 100;
     const providerSuffix = provider ? `:${provider}` : '';
     return `${lat},${lon}${providerSuffix}`;
   }

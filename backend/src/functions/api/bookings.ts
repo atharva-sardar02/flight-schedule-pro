@@ -19,6 +19,11 @@ import logger, {
 } from '../../utils/logger';
 import { requireAuth } from '../../middleware/auth';
 import { handleLambdaError } from '../../utils/lambdaErrorHandler';
+import {
+  validateCreateBookingRequest,
+  validateUpdateBookingRequest,
+  validateUUIDParam,
+} from '../../utils/inputValidation';
 
 /**
  * Main Lambda handler for booking operations
@@ -179,21 +184,16 @@ async function handleCreateBooking(
 
     const data: CreateBookingRequest = JSON.parse(event.body);
 
-    // Validate required fields
-    if (
-      !data.studentId ||
-      !data.instructorId ||
-      !data.departureAirport ||
-      !data.arrivalAirport ||
-      !data.scheduledDatetime ||
-      !data.trainingLevel
-    ) {
+    // Validate input
+    const validation = validateCreateBookingRequest(data);
+    if (!validation.valid) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({
-          error: 'Bad Request',
-          message: 'Missing required fields',
+          error: 'Validation Error',
+          message: 'Invalid input data',
+          errors: validation.errors,
         }),
       };
     }
@@ -236,6 +236,19 @@ async function handleGetBooking(
   headers: Record<string, string>,
   userId: string
 ): Promise<APIGatewayProxyResult> {
+  // Validate UUID parameter
+  const uuidValidation = validateUUIDParam(id, 'bookingId');
+  if (!uuidValidation.valid) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({
+        error: 'Validation Error',
+        message: uuidValidation.errors[0],
+      }),
+    };
+  }
+
   try {
     const booking = await BookingService.getBookingWithUsers(id);
 
@@ -302,6 +315,34 @@ async function handleUpdateBooking(
     }
 
     const data: UpdateBookingRequest = JSON.parse(event.body);
+
+    // Validate UUID parameter
+    const uuidValidation = validateUUIDParam(id, 'bookingId');
+    if (!uuidValidation.valid) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({
+          error: 'Validation Error',
+          message: uuidValidation.errors[0],
+        }),
+      };
+    }
+
+    // Validate input
+    const validation = validateUpdateBookingRequest(data);
+    if (!validation.valid) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({
+          error: 'Validation Error',
+          message: 'Invalid input data',
+          errors: validation.errors,
+        }),
+      };
+    }
+
     const booking = await BookingService.updateBooking(id, data);
 
     return {
@@ -353,6 +394,19 @@ async function handleDeleteBooking(
   headers: Record<string, string>,
   userId: string
 ): Promise<APIGatewayProxyResult> {
+  // Validate UUID parameter
+  const uuidValidation = validateUUIDParam(id, 'bookingId');
+  if (!uuidValidation.valid) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({
+        error: 'Validation Error',
+        message: uuidValidation.errors[0],
+      }),
+    };
+  }
+
   try {
     await BookingService.deleteBooking(id);
 

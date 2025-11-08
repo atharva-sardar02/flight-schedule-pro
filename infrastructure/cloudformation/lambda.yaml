@@ -120,6 +120,9 @@ Resources:
       Timeout: 30
       MemorySize: 512
       ReservedConcurrentExecutions: 10
+      # Provisioned concurrency to eliminate cold starts
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 2
       DeadLetterConfig:
         TargetArn: !GetAtt LambdaDeadLetterQueue.Arn
       Code:
@@ -156,6 +159,9 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
       MemorySize: 1024
+      # Provisioned concurrency for AI engine (critical path)
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 1
       Code:
         S3Bucket: !Ref LambdaCodeBucket
         S3Key: !Ref LambdaCodeKey
@@ -190,6 +196,9 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
       MemorySize: 512
+      # Provisioned concurrency for API handler (reduces latency)
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 3
       Code:
         S3Bucket: !Ref LambdaCodeBucket
         S3Key: !Ref LambdaCodeKey

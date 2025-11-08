@@ -13,7 +13,13 @@ export default function BookingList() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<BookingListFilters>({});
+  const [filters, setFilters] = useState<BookingListFilters>({
+    limit: 20, // Default page size
+    offset: 0,
+  });
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = filters.limit || 20;
 
   useEffect(() => {
     loadBookings();
@@ -25,6 +31,13 @@ export default function BookingList() {
       setError(null);
       const data = await BookingService.listBookings(filters);
       setBookings(data);
+      // If we got fewer results than requested, we're on the last page
+      if (data.length < pageSize) {
+        setTotalCount((currentPage - 1) * pageSize + data.length);
+      } else {
+        // Estimate total (in production, API would return total count)
+        setTotalCount((currentPage * pageSize) + 1);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load bookings');
     } finally {
@@ -32,11 +45,21 @@ export default function BookingList() {
     }
   };
 
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    setFilters((prev) => ({
+      ...prev,
+      offset: (page - 1) * pageSize,
+    }));
+  };
+
   const handleFilterChange = (key: keyof BookingListFilters, value: any) => {
     setFilters((prev) => ({
       ...prev,
       [key]: value || undefined,
+      offset: 0, // Reset to first page when filters change
     }));
+    setCurrentPage(1); // Reset to first page
   };
 
   const formatDate = (dateString: string) => {
@@ -236,6 +259,60 @@ export default function BookingList() {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Controls */}
+      {bookings.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6">
+          <div className="flex-1 flex justify-between sm:hidden">
+            <button
+              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={bookings.length < pageSize}
+              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-gray-700">
+                Showing <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> to{' '}
+                <span className="font-medium">
+                  {Math.min(currentPage * pageSize, totalCount || bookings.length)}
+                </span>{' '}
+                of <span className="font-medium">{totalCount || bookings.length}</span> results
+              </p>
+            </div>
+            <div>
+              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <button
+                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                  Page {currentPage}
+                </span>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={bookings.length < pageSize}
+                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </nav>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

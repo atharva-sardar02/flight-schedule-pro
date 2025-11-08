@@ -17,6 +17,26 @@ Parameters:
     Description: Project name for resource naming
 
 Resources:
+  # Cache Policy for optimized caching
+  CachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub '${ProjectName}-${Environment}-cache-policy'
+        Comment: Optimized cache policy for static assets
+        DefaultTTL: 31536000  # 1 year
+        MaxTTL: 31536000
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingGzip: true
+          EnableAcceptEncodingBrotli: true
+          CookiesConfig:
+            CookieBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+
   # CloudFront Origin Access Control
   CloudFrontOriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
@@ -55,13 +75,89 @@ Resources:
             - GET
             - HEAD
           Compress: true
-          ForwardedValues:
-            QueryString: false
-            Cookies:
-              Forward: none
+          # Cache policy for better performance (replaces ForwardedValues)
+          CachePolicyId: !Ref CachePolicy
+          # Optimized caching: 1 year for static assets, 0 for HTML
           MinTTL: 0
-          DefaultTTL: 86400
+          DefaultTTL: 31536000  # 1 year for static assets
           MaxTTL: 31536000
+        # Cache behaviors for different file types
+        CacheBehaviors:
+          - PathPattern: '*.js'
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: true
+            CachePolicyId: !Ref CachePolicy
+            MinTTL: 31536000  # 1 year for JS files
+            DefaultTTL: 31536000
+            MaxTTL: 31536000
+          - PathPattern: '*.css'
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: true
+            CachePolicyId: !Ref CachePolicy
+            MinTTL: 31536000  # 1 year for CSS files
+            DefaultTTL: 31536000
+            MaxTTL: 31536000
+          - PathPattern: '*.png'
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: false
+            CachePolicyId: !Ref CachePolicy
+            MinTTL: 31536000  # 1 year for images
+            DefaultTTL: 31536000
+            MaxTTL: 31536000
+          - PathPattern: '*.jpg'
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: false
+            CachePolicyId: !Ref CachePolicy
+            MinTTL: 31536000  # 1 year for images
+            DefaultTTL: 31536000
+            MaxTTL: 31536000
+          - PathPattern: '*.svg'
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: true
+            CachePolicyId: !Ref CachePolicy
+            MinTTL: 31536000  # 1 year for SVG
+            DefaultTTL: 31536000
+            MaxTTL: 31536000
         CustomErrorResponses:
           - ErrorCode: 403
             ResponseCode: 200

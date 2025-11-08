@@ -22,7 +22,33 @@ export default defineConfig({
   },
   build: {
     outDir: 'build',
-    sourcemap: true,
+    sourcemap: false, // Disable sourcemaps in production for smaller bundle
+    minify: 'terser', // Use terser for better minification
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.log in production
+        drop_debugger: true,
+      },
+    },
+    // Code splitting and chunk optimization
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks for better caching
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['lucide-react', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+          'utils-vendor': ['axios', 'date-fns'],
+        },
+        // Optimize chunk file names
+        chunkFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js',
+        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
+      },
+    },
+    // Chunk size warnings
+    chunkSizeWarningLimit: 1000, // 1MB
+    // Target modern browsers for smaller bundles
+    target: 'es2015',
   },
 });
 

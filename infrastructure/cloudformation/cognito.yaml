@@ -59,9 +59,11 @@ Resources:
           Mutable: true
       EmailConfiguration:
         EmailSendingAccount: COGNITO_DEFAULT
+      # MFA Configuration: OPTIONAL for all users, but can be enforced per group
       MfaConfiguration: OPTIONAL
       EnabledMfas:
         - SOFTWARE_TOKEN_MFA
+        - SMS_MFA
       UserAttributeUpdateSettings:
         AttributesRequireVerificationBeforeUpdate:
           - email
@@ -131,9 +133,11 @@ Resources:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
       GroupName: Admins
-      Description: System administrators
+      Description: System administrators (MFA required)
       UserPoolId: !Ref UserPool
       Precedence: 1
+      # Note: MFA enforcement for admin group must be enforced via Lambda authorizer
+      # or application logic, as CloudFormation doesn't support per-group MFA requirements
 
   # Identity Pool for AWS resource access (if needed)
   IdentityPool:

@@ -16,6 +16,7 @@ import logger, {
 import { Pool } from 'pg';
 import { getDbPool } from '../../utils/db';
 import { handleLambdaError } from '../../utils/lambdaErrorHandler';
+import { validateLoginRequest, validateRegisterRequest } from '../../utils/inputValidation';
 
 /**
  * Main Lambda handler for authentication operations
@@ -107,13 +108,15 @@ async function handleLogin(
     const credentials: LoginRequest = JSON.parse(event.body);
 
     // Validate input
-    if (!credentials.email || !credentials.password) {
+    const validation = validateLoginRequest(credentials);
+    if (!validation.valid) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({
-          error: 'Bad Request',
-          message: 'Email and password are required',
+          error: 'Validation Error',
+          message: 'Invalid input data',
+          errors: validation.errors,
         }),
       };
     }
@@ -177,13 +180,15 @@ async function handleRegister(
     });
 
     // Validate input
-    if (!data.email || !data.password || !data.firstName || !data.lastName || !data.role) {
+    const validation = validateRegisterRequest(data);
+    if (!validation.valid) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({
-          error: 'Bad Request',
-          message: 'Email, password, firstName, lastName, and role are required',
+          error: 'Validation Error',
+          message: 'Invalid input data',
+          errors: validation.errors,
         }),
       };
     }

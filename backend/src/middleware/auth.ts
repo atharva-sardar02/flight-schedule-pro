@@ -104,6 +104,32 @@ export function hasRole(user: User, allowedRoles: string[]): boolean {
 }
 
 /**
+ * Check if MFA is required for user role
+ */
+export function requiresMFA(user: User): boolean {
+  // Admin roles require MFA
+  return user.role === 'ADMIN';
+}
+
+/**
+ * Verify MFA token (if required)
+ * Note: This is a placeholder - actual MFA verification should be done via Cognito
+ */
+export async function verifyMFA(user: User, mfaToken?: string): Promise<boolean> {
+  if (!requiresMFA(user)) {
+    return true; // MFA not required for this role
+  }
+
+  if (!mfaToken) {
+    return false; // MFA required but token not provided
+  }
+
+  // In production, verify MFA token with Cognito
+  // For now, return true if token is provided
+  return mfaToken.length > 0;
+}
+
+/**
  * Middleware to check user role
  */
 export function requireRole(

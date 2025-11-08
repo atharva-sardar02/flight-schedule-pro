@@ -15,6 +15,11 @@ import {
   endPerformanceTimer,
 } from '../../utils/logger';
 import { handleLambdaError } from '../../utils/lambdaErrorHandler';
+import {
+  validateRecurringAvailabilityRequest,
+  validateAvailabilityOverrideRequest,
+  validateUUIDParam,
+} from '../../utils/inputValidation';
 
 // Initialize database pool
 let pool: Pool;
@@ -112,6 +117,21 @@ async function handleRecurringAvailability(
     case 'POST':
       // POST /availability/recurring - Create new recurring pattern
       const createData = JSON.parse(event.body || '{}');
+      
+      // Validate input
+      const createValidation = validateRecurringAvailabilityRequest(createData);
+      if (!createValidation.valid) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Validation Error',
+            message: 'Invalid input data',
+            errors: createValidation.errors,
+          }),
+        };
+      }
+      
       const newPattern = await service.createRecurringAvailability(user.id, createData);
       return {
         statusCode: 201,
@@ -128,7 +148,42 @@ async function handleRecurringAvailability(
           body: JSON.stringify({ error: 'Recurring availability ID required' }),
         };
       }
+      
+      // Validate UUID parameter
+      const uuidValidation = validateUUIDParam(recurringId, 'recurringId');
+      if (!uuidValidation.valid) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Validation Error',
+            message: uuidValidation.errors[0],
+          }),
+        };
+      }
+      
       const updateData = JSON.parse(event.body || '{}');
+      
+      // Validate input (partial validation for updates)
+      if (updateData.startTime || updateData.endTime) {
+        const updateValidation = validateRecurringAvailabilityRequest({
+          dayOfWeek: updateData.dayOfWeek || 0,
+          startTime: updateData.startTime || '00:00:00',
+          endTime: updateData.endTime || '23:59:59',
+        });
+        if (!updateValidation.valid) {
+          return {
+            statusCode: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              error: 'Validation Error',
+              message: 'Invalid time format',
+              errors: updateValidation.errors,
+            }),
+          };
+        }
+      }
+      
       const updatedPattern = await service.updateRecurringAvailability(
         recurringId,
         user.id,

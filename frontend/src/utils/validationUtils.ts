@@ -115,15 +115,46 @@ export function isInRange(value: number, min: number, max: number): boolean {
 }
 
 /**
- * Sanitize string input (prevent XSS)
+ * Sanitize string input (prevent XSS and SQL injection)
  */
 export function sanitizeString(input: string): string {
+  if (typeof input !== 'string') {
+    return '';
+  }
+
   return input
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+    .trim()
+    .replace(/[<>]/g, '') // Remove angle brackets
+    .replace(/['"]/g, '') // Remove quotes
+    .replace(/[;\\]/g, '') // Remove semicolons and backslashes
+    .replace(/[<>]/g, '&lt;') // HTML encode remaining brackets
+    .replace(/[<>]/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
+    .replace(/\//g, '&#x2F;')
+    .substring(0, 1000); // Limit length
+}
+
+/**
+ * Sanitize object recursively
+ */
+export function sanitizeObject(obj: any): any {
+  if (typeof obj === 'string') {
+    return sanitizeString(obj);
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeObject(item));
+  }
+  if (obj && typeof obj === 'object') {
+    const sanitized: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        sanitized[sanitizeString(key)] = sanitizeObject(obj[key]);
+      }
+    }
+    return sanitized;
+  }
+  return obj;
 }
 
 /**

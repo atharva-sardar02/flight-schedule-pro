@@ -198,6 +198,26 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # Read Replica for Dashboard Queries (Production only)
+  DBReadReplica:
+    Type: AWS::RDS::DBInstance
+    Condition: IsProduction
+    Properties:
+      DBInstanceIdentifier: !Sub '${ProjectName}-${Environment}-db-read-replica'
+      SourceDBInstanceIdentifier: !Ref DBInstance
+      DBInstanceClass: !Ref DBInstanceClass
+      PubliclyAccessible: false
+      AutoMinorVersionUpgrade: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-db-read-replica'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: ReadReplica
+
 Conditions:
   IsProduction: !Equals [!Ref Environment, production]
 
@@ -243,5 +263,12 @@ Outputs:
     Value: !Ref PrivateSubnet2
     Export:
       Name: !Sub '${ProjectName}-${Environment}-PrivateSubnet2Id'
+
+  DBReadReplicaEndpoint:
+    Condition: IsProduction
+    Description: RDS read replica endpoint
+    Value: !GetAtt DBReadReplica.Endpoint.Address
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-DBReadReplicaEndpoint'
 
 

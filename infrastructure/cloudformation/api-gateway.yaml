@@ -16,6 +16,9 @@ Parameters:
     Default: flight-schedule-pro
     Description: Project name for resource naming
 
+Conditions:
+  IsProduction: !Equals [!Ref Environment, 'production']
+
 Resources:
   # REST API
   RestApi:
@@ -68,6 +71,44 @@ Resources:
           - LambdaArn:
               Fn::ImportValue: !Sub '${ProjectName}-${Environment}-ApiHandlerFunctionArn'
 
+  # Gateway Response for CORS
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_4XX
+      RestApiId: !Ref RestApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Requested-With'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        gatewayresponse.header.X-Content-Type-Options: "'nosniff'"
+        gatewayresponse.header.X-Frame-Options: "'DENY'"
+        gatewayresponse.header.X-XSS-Protection: "'1; mode=block'"
+        gatewayresponse.header.Strict-Transport-Security: "'max-age=31536000; includeSubDomains'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: DEFAULT_5XX
+      RestApiId: !Ref RestApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Requested-With'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        gatewayresponse.header.X-Content-Type-Options: "'nosniff'"
+        gatewayresponse.header.X-Frame-Options: "'DENY'"
+        gatewayresponse.header.X-XSS-Protection: "'1; mode=block'"
+        gatewayresponse.header.Strict-Transport-Security: "'max-age=31536000; includeSubDomains'"
+
+  GatewayResponseUnauthorized:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseType: UNAUTHORIZED
+      RestApiId: !Ref RestApi
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Requested-With'"
+
   # Lambda Permission for API Gateway
   ApiGatewayInvokePermission:
     Type: AWS::Lambda::Permission
@@ -94,14 +135,21 @@ Resources:
       StageName: !Ref Environment
       RestApiId: !Ref RestApi
       DeploymentId: !Ref ApiDeployment
+      # Rate limiting: 1000 requests/second burst, 500 requests/second sustained
       ThrottlingBurstLimit: 1000
-      ThrottlingRateLimit: 1000
+      ThrottlingRateLimit: 500
       MethodSettings:
         - ResourcePath: '/*'
           HttpMethod: '*'
           LoggingLevel: INFO
           DataTraceEnabled: true
           MetricsEnabled: true
+          ThrottlingBurstLimit: 1000
+          ThrottlingRateLimit: 500
+          CacheTtlInSeconds: 0
+          CachingEnabled: false
+      Variables:
+        SecurityHeaders: 'enabled'
 
   # WebSocket API
   WebSocketApi:
