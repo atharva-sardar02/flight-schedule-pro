@@ -1,0 +1,77 @@
+[
+  {
+    "id": "b1234567-8901-2345-6789-012345678901",
+    "studentId": "d408e4c8-a021-7020-2b81-4aba6a1507c1",
+    "instructorId": "e519f5d9-b132-8131-3c92-5bcb7b2618d2",
+    "scheduledTime": "2025-11-15T10:00:00Z",
+    "departureAirport": "KJFK",
+    "departureLat": 40.6413,
+    "departureLon": -73.7781,
+    "arrivalAirport": "KBOS",
+    "arrivalLat": 42.3656,
+    "arrivalLon": -71.0096,
+    "aircraftId": "N12345",
+    "trainingLevel": "PRIVATE_PILOT",
+    "status": "CONFIRMED",
+    "version": 1,
+    "createdAt": "2025-11-01T00:00:00Z",
+    "updatedAt": "2025-11-01T00:00:00Z"
+  },
+  {
+    "id": "b2345678-9012-3456-7890-123456789012",
+    "studentId": "a73b17fb-d354-a353-5eb4-7eed9d4830f4",
+    "instructorId": "e519f5d9-b132-8131-3c92-5bcb7b2618d2",
+    "scheduledTime": "2025-11-16T14:00:00Z",
+    "departureAirport": "KLAX",
+    "departureLat": 33.9425,
+    "departureLon": -118.4081,
+    "arrivalAirport": "KSFO",
+    "arrivalLat": 37.6213,
+    "arrivalLon": -122.3790,
+    "aircraftId": "N67890",
+    "trainingLevel": "COMMERCIAL_PILOT",
+    "status": "PENDING",
+    "version": 1,
+    "createdAt": "2025-11-02T00:00:00Z",
+    "updatedAt": "2025-11-02T00:00:00Z"
+  },
+  {
+    "id": "b3456789-0123-4567-8901-234567890123",
+    "studentId": "d408e4c8-a021-7020-2b81-4aba6a1507c1",
+    "instructorId": "e519f5d9-b132-8131-3c92-5bcb7b2618d2",
+    "scheduledTime": "2025-11-17T09:00:00Z",
+    "departureAirport": "KORD",
+    "departureLat": 41.9742,
+    "departureLon": -87.9073,
+    "arrivalAirport": "KMDW",
+    "arrivalLat": 41.7868,
+    "arrivalLon": -87.7522,
+    "aircraftId": "N11111",
+    "trainingLevel": "PRIVATE_PILOT",
+    "status": "WEATHER_CONFLICT",
+    "version": 1,
+    "createdAt": "2025-11-03T00:00:00Z",
+    "updatedAt": "2025-11-03T00:00:00Z"
+  },
+  {
+    "id": "b4567890-1234-5678-9012-345678901234",
+    "studentId": "a73b17fb-d354-a353-5eb4-7eed9d4830f4",
+    "instructorId": "e519f5d9-b132-8131-3c92-5bcb7b2618d2",
+    "scheduledTime": "2025-11-18T11:00:00Z",
+    "departureAirport": "KATL",
+    "departureLat": 33.6407,
+    "departureLon": -84.4277,
+    "arrivalAirport": "KCLT",
+    "arrivalLat": 35.2140,
+    "arrivalLon": -80.9431,
+    "aircraftId": "N22222",
+    "trainingLevel": "COMMERCIAL_PILOT",
+    "status": "CANCELLED",
+    "version": 1,
+    "createdAt": "2025-11-04T00:00:00Z",
+    "updatedAt": "2025-11-04T00:00:00Z"
+  }
+]
+
+
+

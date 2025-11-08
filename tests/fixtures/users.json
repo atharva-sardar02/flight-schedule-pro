@@ -1,0 +1,58 @@
+[
+  {
+    "id": "d408e4c8-a021-7020-2b81-4aba6a1507c1",
+    "cognitoUserId": "test-user-1",
+    "email": "student@example.com",
+    "name": "John Student",
+    "phoneNumber": "+1234567890",
+    "role": "STUDENT",
+    "trainingLevel": "PRIVATE_PILOT",
+    "createdAt": "2025-01-01T00:00:00Z",
+    "updatedAt": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "e519f5d9-b132-8131-3c92-5bcb7b2618d2",
+    "cognitoUserId": "test-user-2",
+    "email": "instructor@example.com",
+    "name": "Jane Instructor",
+    "phoneNumber": "+1234567891",
+    "role": "INSTRUCTOR",
+    "trainingLevel": null,
+    "createdAt": "2025-01-01T00:00:00Z",
+    "updatedAt": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "f62a06ea-c243-9242-4da3-6ddc8c3729e3",
+    "cognitoUserId": "test-user-3",
+    "email": "admin@example.com",
+    "name": "Admin User",
+    "phoneNumber": "+1234567892",
+    "role": "ADMIN",
+    "trainingLevel": null,
+    "createdAt": "2025-01-01T00:00:00Z",
+    "updatedAt": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "a73b17fb-d354-a353-5eb4-7eed9d4830f4",
+    "cognitoUserId": "test-user-4",
+    "email": "student2@example.com",
+    "name": "Mike Student",
+    "phoneNumber": "+1234567893",
+    "role": "STUDENT",
+    "trainingLevel": "COMMERCIAL_PILOT",
+    "createdAt": "2025-01-01T00:00:00Z",
+    "updatedAt": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "b84c28gc-e465-b464-6fc5-8ffe0e5941g5",
+    "cognitoUserId": "rishi-noble-1",
+    "email": "rishi.noble@gmail.com",
+    "name": "Rishi Noble",
+    "phoneNumber": "+1234567894",
+    "role": "ADMIN",
+    "trainingLevel": null,
+    "createdAt": "2025-01-01T00:00:00Z",
+    "updatedAt": "2025-01-01T00:00:00Z"
+  }
+]
+

@@ -7,6 +7,14 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { Pool } from 'pg';
 import { AvailabilityService } from '../../services/availabilityService';
 import { requireAuth } from '../../middleware/auth';
+import {
+  logLambdaStart,
+  logLambdaEnd,
+  logAPICall,
+  startPerformanceTimer,
+  endPerformanceTimer,
+} from '../../utils/logger';
+import { handleLambdaError } from '../../utils/lambdaErrorHandler';
 
 // Initialize database pool
 let pool: Pool;
@@ -32,53 +40,49 @@ function getPool(): Pool {
  */
 export const availabilityHandler = async (
   event: APIGatewayProxyEvent
-): Promise<APIGatewayProxyResult> => {
-  console.log('Availability API request:', {
-    path: event.path,
-    method: event.httpMethod,
-    resource: event.resource,
-  });
+): Promise<APIGatewayProxyResult> {
+  const startTime = Date.now();
+  logLambdaStart('availabilityAPI', event);
 
   try {
     // Authenticate request
     const user = await requireAuth(event);
-    console.log('Authenticated user:', user);
 
     const availabilityService = new AvailabilityService(getPool());
     const method = event.httpMethod;
     const pathSegments = event.path.split('/').filter(Boolean);
 
+    startPerformanceTimer(`availability_${method}_${event.path}`);
+
+    let result: APIGatewayProxyResult;
+
     // Route handling
     if (pathSegments.includes('recurring')) {
-      return handleRecurringAvailability(event, user, availabilityService);
+      result = await handleRecurringAvailability(event, user, availabilityService);
     } else if (pathSegments.includes('overrides')) {
-      return handleAvailabilityOverrides(event, user, availabilityService);
+      result = await handleAvailabilityOverrides(event, user, availabilityService);
     } else if (method === 'GET' && pathSegments.length === 1) {
       // GET /availability - Get computed availability
-      return await handleGetAvailability(event, user, availabilityService);
-    }
-
-    return {
-      statusCode: 404,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Not found' }),
-    };
-  } catch (error: any) {
-    console.error('Availability route error:', error);
-
-    if (error.message === 'Unauthorized' || error.message === 'Invalid token') {
-      return {
-        statusCode: 401,
+      result = await handleGetAvailability(event, user, availabilityService);
+    } else {
+      result = {
+        statusCode: 404,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Unauthorized' }),
+        body: JSON.stringify({ error: 'Not found' }),
       };
     }
 
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: error.message || 'Internal server error' }),
-    };
+    const duration = endPerformanceTimer(`availability_${method}_${event.path}`);
+    logLambdaEnd('availabilityAPI', true, result.statusCode);
+    logAPICall(event.path, method, result.statusCode, duration);
+
+    return result;
+  } catch (error: any) {
+    return handleLambdaError(error, {
+      functionName: 'availabilityAPI',
+      event,
+      defaultStatusCode: error.message === 'Unauthorized' ? 401 : 500,
+    });
   }
 };
 

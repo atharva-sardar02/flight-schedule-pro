@@ -55,20 +55,52 @@ export const handler = async (
   let errors = 0;
 
   try {
-    // Initialize services
-    const weatherService = new WeatherService();
-    const weatherValidator = new WeatherValidator(weatherService);
-    const conflictDetector = new ConflictDetector(dbPool, weatherValidator);
-    const auditService = new AuditService(dbPool);
-    const notificationTrigger = new NotificationTrigger(dbPool);
+    // Initialize services with error handling
+    let weatherService: WeatherService;
+    let weatherValidator: WeatherValidator;
+    let conflictDetector: ConflictDetector;
+    let auditService: AuditService;
+    let notificationTrigger: NotificationTrigger;
+
+    try {
+      weatherService = new WeatherService();
+      weatherValidator = new WeatherValidator(weatherService);
+      conflictDetector = new ConflictDetector(dbPool, weatherValidator);
+      auditService = new AuditService(dbPool);
+      notificationTrigger = new NotificationTrigger(dbPool);
+    } catch (initError: any) {
+      logError('Failed to initialize services', initError);
+      // Return partial success - system can continue with degraded functionality
+      return {
+        statusCode: 503,
+        body: JSON.stringify({
+          success: false,
+          error: 'Service initialization failed',
+          message: 'Weather monitoring services unavailable',
+          retryable: true,
+          processedCount: 0,
+          conflictsDetected: 0,
+          notificationsSent: 0,
+          errors: 1,
+        }),
+      };
+    }
 
     logInfo('Weather monitoring cycle started');
 
-    // Check all bookings in the next 48 hours
-    const conflicts = await conflictDetector.checkUpcomingBookings(48);
-    processedCount = conflicts.length;
-
-    logInfo(`Processed ${processedCount} bookings`);
+    // Check all bookings in the next 48 hours with graceful degradation
+    let conflicts: any[] = [];
+    try {
+      conflicts = await conflictDetector.checkUpcomingBookings(48);
+      processedCount = conflicts.length;
+      logInfo(`Processed ${processedCount} bookings`);
+    } catch (checkError: any) {
+      logError('Failed to check upcoming bookings', checkError);
+      // Continue with empty conflicts - partial success
+      logWarn('Continuing with degraded functionality - no conflict checks performed');
+      conflicts = [];
+      processedCount = 0;
+    }
 
     // Process each conflict
     for (const conflict of conflicts) {
@@ -114,24 +146,40 @@ export const handler = async (
             }
           );
 
-          // Send notifications if needed
+          // Send notifications if needed (with graceful degradation)
           if (conflict.shouldNotify) {
-            await notificationTrigger.triggerWeatherAlert(conflict, booking);
-            notificationsSent += 2; // Student + Instructor
+            try {
+              await notificationTrigger.triggerWeatherAlert(conflict, booking);
+              notificationsSent += 2; // Student + Instructor
 
-            await auditService.logNotificationSent(
-              booking.student_id,
-              'WEATHER_ALERT',
-              booking.id,
-              { severity: conflict.severity }
-            );
+              // Audit logging (non-critical - continue on failure)
+              try {
+                await auditService.logNotificationSent(
+                  booking.student_id,
+                  'WEATHER_ALERT',
+                  booking.id,
+                  { severity: conflict.severity }
+                );
+              } catch (auditError: any) {
+                logWarn('Failed to log notification audit', { error: auditError.message });
+              }
 
-            await auditService.logNotificationSent(
-              booking.instructor_id,
-              'WEATHER_ALERT',
-              booking.id,
-              { severity: conflict.severity }
-            );
+              try {
+                await auditService.logNotificationSent(
+                  booking.instructor_id,
+                  'WEATHER_ALERT',
+                  booking.id,
+                  { severity: conflict.severity }
+                );
+              } catch (auditError: any) {
+                logWarn('Failed to log notification audit', { error: auditError.message });
+              }
+            } catch (notifyError: any) {
+              logError('Failed to send notifications', notifyError, {
+                bookingId: conflict.bookingId,
+              });
+              // Continue processing - notification failure is non-critical
+            }
           }
 
           // Log status change
@@ -154,34 +202,56 @@ export const handler = async (
         } else {
           // Check if weather has cleared (was AT_RISK, now valid)
           if (previousStatus === 'AT_RISK') {
-            // Update booking status back to CONFIRMED
-            await conflictDetector.updateBookingStatus(conflict.bookingId, conflict);
+            try {
+              // Update booking status back to CONFIRMED
+              await conflictDetector.updateBookingStatus(conflict.bookingId, conflict);
 
-            // Send weather cleared notifications
-            await notificationTrigger.triggerWeatherCleared(booking);
-            notificationsSent += 2; // Student + Instructor
+              // Send weather cleared notifications (non-critical)
+              try {
+                await notificationTrigger.triggerWeatherCleared(booking);
+                notificationsSent += 2; // Student + Instructor
+              } catch (notifyError: any) {
+                logWarn('Failed to send weather cleared notifications', {
+                  error: notifyError.message,
+                  bookingId: conflict.bookingId,
+                });
+              }
 
-            // Log status change
-            await auditService.logStatusChange(
-              conflict.bookingId,
-              'AT_RISK',
-              'CONFIRMED',
-              'Weather conditions improved',
-              'system'
-            );
+              // Log status change (non-critical)
+              try {
+                await auditService.logStatusChange(
+                  conflict.bookingId,
+                  'AT_RISK',
+                  'CONFIRMED',
+                  'Weather conditions improved',
+                  'system'
+                );
+              } catch (auditError: any) {
+                logWarn('Failed to log status change', { error: auditError.message });
+              }
 
-            logInfo('Weather cleared', {
-              bookingId: conflict.bookingId,
-            });
+              logInfo('Weather cleared', {
+                bookingId: conflict.bookingId,
+              });
+            } catch (updateError: any) {
+              logError('Failed to update booking status', updateError, {
+                bookingId: conflict.bookingId,
+              });
+              // Continue processing other bookings
+            }
           }
 
-          // Log weather check (even if valid)
-          await auditService.logWeatherCheck(
-            conflict.bookingId,
-            true,
-            conflict.weatherValidation,
-            'system'
-          );
+          // Log weather check (even if valid) - non-critical operation
+          try {
+            await auditService.logWeatherCheck(
+              conflict.bookingId,
+              true,
+              conflict.weatherValidation,
+              'system'
+            );
+          } catch (auditError: any) {
+            logWarn('Failed to log weather check', { error: auditError.message });
+          }
         }
       } catch (error: any) {
         errors++;
@@ -192,8 +262,13 @@ export const handler = async (
       }
     }
 
-    // Get statistics
-    const stats = await conflictDetector.getConflictStatistics();
+    // Get statistics (non-critical - continue on failure)
+    let stats: any = {};
+    try {
+      stats = await conflictDetector.getConflictStatistics();
+    } catch (statsError: any) {
+      logWarn('Failed to get conflict statistics', { error: statsError.message });
+    }
 
     logInfo('Weather monitoring cycle completed', {
       processedCount,
@@ -204,18 +279,22 @@ export const handler = async (
     });
 
     const duration = Date.now() - startTime;
-    logLambdaEnd('weatherMonitor', duration, errors === 0);
+    // Consider success if we processed at least some bookings, even with errors
+    const success = errors < processedCount;
+    logLambdaEnd('weatherMonitor', duration, success);
 
+    // Return success even with some errors (graceful degradation)
     return {
-      statusCode: 200,
+      statusCode: success ? 200 : 207, // 207 Multi-Status for partial success
       body: JSON.stringify({
-        success: true,
+        success: success,
         processedCount,
         conflictsDetected,
         notificationsSent,
         errors,
         statistics: stats,
         duration,
+        degraded: errors > 0,
       }),
     };
   } catch (error: any) {

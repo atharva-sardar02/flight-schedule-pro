@@ -7,6 +7,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { logError as logErrorToService } from '../../utils/errorHandling';
 
 interface Props {
   children: ReactNode;
@@ -34,13 +35,31 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Log error to error reporting service
+    // Log error to console
     console.error('Error caught by boundary:', error, errorInfo);
+    
+    // Log to error tracking service (e.g., Sentry, CloudWatch)
+    this.logErrorToService(error, errorInfo);
     
     this.setState({
       error,
       errorInfo,
     });
+  }
+
+  private logErrorToService(error: Error, errorInfo: ErrorInfo): void {
+    try {
+      // Use centralized error logging utility
+      logErrorToService(error, {
+        componentStack: errorInfo.componentStack,
+        errorBoundary: true,
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+      });
+    } catch (loggingError) {
+      // Don't let logging errors break the error boundary
+      console.error('Error while logging to service:', loggingError);
+    }
   }
 
   handleReset = (): void => {

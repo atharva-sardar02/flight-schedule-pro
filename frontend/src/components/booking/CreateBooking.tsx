@@ -9,6 +9,8 @@ import BookingService from '../../services/booking';
 import { CreateBookingData } from '../../types/booking';
 import { TrainingLevel } from '../../types/weather';
 import { useAuth } from '../../hooks/useAuth';
+import { getUserFriendlyError, showErrorNotification } from '../../utils/errorHandling';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // Common US airports for demo
 const AIRPORTS = [
@@ -121,7 +123,9 @@ export default function CreateBooking() {
 
       navigate(`/bookings/${booking.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create booking');
+      const friendlyError = getUserFriendlyError(err);
+      setError(friendlyError.message);
+      showErrorNotification(err, 'create-booking');
     } finally {
       setLoading(false);
     }
@@ -136,9 +140,9 @@ export default function CreateBooking() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-            {error}
-          </div>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         <div className="bg-white shadow-sm rounded-lg p-6 space-y-6">

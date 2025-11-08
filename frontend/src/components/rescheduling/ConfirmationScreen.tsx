@@ -1,14 +1,16 @@
 /**
  * ConfirmationScreen Component
- * Displays final confirmation after reschedule selection
+ * Displays final confirmation after reschedule selection with weather re-validation
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Calendar, MapPin, Clock, Users } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { CheckCircle2, Calendar, MapPin, Clock, Users, AlertTriangle, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
+import { getUserFriendlyError, showErrorNotification } from '../../utils/errorHandling';
 
 interface ConfirmationScreenProps {
   bookingDetails: {
@@ -24,8 +26,9 @@ interface ConfirmationScreenProps {
     departureAirport: string;
     arrivalAirport: string;
   };
-  onConfirm: () => void;
+  onConfirm: () => Promise<{ success: boolean; error?: string; requiresNewOptions?: boolean }>;
   onCancel?: () => void;
+  onRequestNewOptions?: () => void;
   loading?: boolean;
 }
 
@@ -36,24 +39,89 @@ export function ConfirmationScreen({
   route,
   onConfirm,
   onCancel,
+  onRequestNewOptions,
   loading = false,
 }: ConfirmationScreenProps) {
+  const [confirming, setConfirming] = useState(false);
+  const [revalidationError, setRevalidationError] = useState<{
+    message: string;
+    requiresNewOptions: boolean;
+  } | null>(null);
+
   const oldDate = new Date(oldScheduledTime);
   const newDate = new Date(newScheduledTime);
 
+  const handleConfirm = async () => {
+    try {
+      setConfirming(true);
+      setRevalidationError(null);
+
+      const result = await onConfirm();
+
+      if (!result.success) {
+        if (result.requiresNewOptions) {
+          setRevalidationError({
+            message: result.error || 'Weather conditions have changed',
+            requiresNewOptions: true,
+          });
+        } else {
+          setRevalidationError({
+            message: result.error || 'Failed to confirm reschedule',
+            requiresNewOptions: false,
+          });
+        }
+      }
+    } catch (error: any) {
+      const friendlyError = getUserFriendlyError(error);
+      setRevalidationError({
+        message: friendlyError.message,
+        requiresNewOptions: false,
+      });
+      showErrorNotification(error, 'confirm-reschedule');
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <Card className="bg-green-50 border-green-200">
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-3 text-green-800">
-            <CheckCircle2 className="h-8 w-8" />
-            <div>
-              <h3 className="font-semibold text-lg">Reschedule Confirmed!</h3>
-              <p className="text-sm">Your flight has been rescheduled to a new time.</p>
+      {!revalidationError && (
+        <Card className="bg-green-50 border-green-200">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3 text-green-800">
+              <CheckCircle2 className="h-8 w-8" />
+              <div>
+                <h3 className="font-semibold text-lg">Ready to Confirm Reschedule</h3>
+                <p className="text-sm">Weather will be re-validated before final confirmation</p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
+
+      {revalidationError && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-5 w-5" />
+          <AlertDescription>
+            <p className="font-semibold mb-2">{revalidationError.message}</p>
+            {revalidationError.requiresNewOptions && (
+              <p className="text-sm mb-3">
+                The selected time slot no longer meets weather requirements. New options need to be generated.
+              </p>
+            )}
+            {revalidationError.requiresNewOptions && onRequestNewOptions && (
+              <Button
+                onClick={onRequestNewOptions}
+                variant="outline"
+                size="sm"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Generate New Options
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
@@ -140,16 +208,23 @@ export function ConfirmationScreen({
           {/* Actions */}
           <div className="border-t pt-4 flex items-center justify-between">
             <p className="text-sm text-gray-600">
-              All participants have been notified of this change.
+              Weather will be checked immediately before confirmation
             </p>
             <div className="flex gap-3">
               {onCancel && (
-                <Button variant="outline" onClick={onCancel} disabled={loading}>
-                  Back to Bookings
+                <Button variant="outline" onClick={onCancel} disabled={confirming}>
+                  Cancel
                 </Button>
               )}
-              <Button onClick={onConfirm} disabled={loading}>
-                {loading ? 'Processing...' : 'Finalize Reschedule'}
+              <Button onClick={handleConfirm} disabled={confirming || loading}>
+                {confirming ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Validating Weather...
+                  </>
+                ) : (
+                  'Confirm Reschedule'
+                )}
               </Button>
             </div>
           </div>
@@ -159,11 +234,12 @@ export function ConfirmationScreen({
       <Card className="bg-blue-50 border-blue-200">
         <CardContent className="pt-4">
           <div className="text-sm text-blue-800">
-            <p className="font-medium mb-1">What's Next?</p>
+            <p className="font-medium mb-1">What Happens Next?</p>
             <ul className="list-disc list-inside space-y-1 text-blue-700">
-              <li>Weather will continue to be monitored leading up to the flight</li>
-              <li>You'll receive notifications of any status changes</li>
-              <li>Both student and instructor have access to this updated schedule</li>
+              <li>Weather conditions will be re-validated in real-time</li>
+              <li>If conditions are suitable, the booking will be updated</li>
+              <li>Both student and instructor will receive email confirmation</li>
+              <li>Weather monitoring will continue for the new time slot</li>
             </ul>
           </div>
         </CardContent>

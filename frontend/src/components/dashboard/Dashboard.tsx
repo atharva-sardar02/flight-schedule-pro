@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { WeatherAlerts } from './WeatherAlerts';
 import { FlightStatus } from './FlightStatus';
 import { MetricsPanel } from './MetricsPanel';
@@ -29,6 +30,7 @@ interface DashboardData {
 
 export function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -106,8 +108,23 @@ export function Dashboard() {
   };
 
   const handleViewBookingDetails = (bookingId: string) => {
-    // TODO: Navigate to booking details page
-    console.log('View booking:', bookingId);
+    navigate(`/bookings/${bookingId}`);
+  };
+
+  const handleScheduleNewFlight = () => {
+    navigate('/bookings/new');
+  };
+
+  const handleManageAvailability = () => {
+    navigate('/availability');
+  };
+
+  const handleViewAllBookings = () => {
+    navigate('/bookings');
+  };
+
+  const handleSystemSettings = () => {
+    navigate('/settings');
   };
 
   if (loading) {
@@ -119,7 +136,7 @@ export function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div>
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -164,10 +181,10 @@ export function Dashboard() {
         <div className="bg-white border rounded-lg p-6">
           <h3 className="font-semibold mb-4">Quick Actions</h3>
           <div className="flex gap-3 flex-wrap">
-            <Button>Schedule New Flight</Button>
-            <Button variant="outline">Manage Availability</Button>
-            <Button variant="outline">View All Bookings</Button>
-            <Button variant="outline">System Settings</Button>
+            <Button onClick={handleScheduleNewFlight}>Schedule New Flight</Button>
+            <Button variant="outline" onClick={handleManageAvailability}>Manage Availability</Button>
+            <Button variant="outline" onClick={handleViewAllBookings}>View All Bookings</Button>
+            <Button variant="outline" onClick={handleSystemSettings}>System Settings</Button>
           </div>
         </div>
 

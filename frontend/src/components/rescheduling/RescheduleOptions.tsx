@@ -7,9 +7,11 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Calendar, MapPin, Cloud } from 'lucide-react';
 import { generateRescheduleOptions, getRescheduleOptions, RescheduleOption } from '@/services/rescheduling';
 import { format } from 'date-fns';
+import { getUserFriendlyError, showErrorNotification } from '../../utils/errorHandling';
 
 interface RescheduleOptionsProps {
   bookingId: string;
@@ -36,7 +38,9 @@ export function RescheduleOptions({ bookingId, onOptionsLoaded }: RescheduleOpti
         onOptionsLoaded(data);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to load options');
+      const friendlyError = getUserFriendlyError(err);
+      setError(friendlyError.message);
+      showErrorNotification(err, 'load-reschedule-options');
     } finally {
       setLoading(false);
     }
@@ -52,7 +56,9 @@ export function RescheduleOptions({ bookingId, onOptionsLoaded }: RescheduleOpti
         onOptionsLoaded(data);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to generate options');
+      const friendlyError = getUserFriendlyError(err);
+      setError(friendlyError.message);
+      showErrorNotification(err, 'generate-reschedule-options');
     } finally {
       setGenerating(false);
     }
@@ -89,12 +95,14 @@ export function RescheduleOptions({ bookingId, onOptionsLoaded }: RescheduleOpti
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-        <p className="text-red-800">{error}</p>
-        <Button onClick={loadOptions} className="mt-2" variant="outline">
-          Retry
-        </Button>
-      </div>
+      <Alert variant="destructive">
+        <AlertDescription>
+          <p className="mb-2">{error}</p>
+          <Button onClick={loadOptions} variant="outline" size="sm">
+            Retry
+          </Button>
+        </AlertDescription>
+      </Alert>
     );
   }
 

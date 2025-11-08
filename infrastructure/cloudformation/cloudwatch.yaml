@@ -122,6 +122,106 @@ Resources:
       AlarmActions:
         - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-AlertTopic'
 
+  # Lambda Error Rate Alarm - Weather Monitor (Percentage)
+  WeatherMonitorErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-weather-monitor-error-rate'
+      AlarmDescription: Weather Monitor error rate exceeds 5%
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub '${ProjectName}-${Environment}-weather-monitor'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-AlertTopic'
+
+  # Lambda Duration Alarm - Weather Monitor
+  WeatherMonitorDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-weather-monitor-duration'
+      AlarmDescription: Weather Monitor execution time exceeds 25 seconds
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 25000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub '${ProjectName}-${Environment}-weather-monitor'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-AlertTopic'
+
+  # Lambda Error Rate Alarm - API Handler (Percentage)
+  ApiHandlerErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-api-handler-error-rate'
+      AlarmDescription: API Handler error rate exceeds 5%
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub '${ProjectName}-${Environment}-api-handler'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-AlertTopic'
+
+  # Lambda Throttles Alarm
+  LambdaThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-lambda-throttles'
+      AlarmDescription: Lambda function throttles detected
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub '${ProjectName}-${Environment}-weather-monitor'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-AlertTopic'
+
+  # API Gateway 4xx Errors Alarm
+  ApiGateway4xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-api-gateway-4xx'
+      AlarmDescription: API Gateway 4xx errors exceed 10%
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub '${ProjectName}-${Environment}-rest-api'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-AlertTopic'
+
   # CloudWatch Dashboard
   MainDashboard:
     Type: AWS::CloudWatch::Dashboard
@@ -174,6 +274,75 @@ Resources:
                 "region": "${AWS::Region}",
                 "title": "RDS Performance",
                 "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Custom Metrics - Weather Checks",
+                "metrics": [
+                  ["FlightSchedulePro", "WeatherCheck", {"stat": "Sum", "period": 600}]
+                ],
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 600
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Custom Metrics - Weather Conflicts",
+                "metrics": [
+                  ["FlightSchedulePro", "WeatherConflict", {"stat": "Sum", "period": 600, "color": "#ff7f0e"}]
+                ],
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 600
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Custom Metrics - Bookings",
+                "metrics": [
+                  ["FlightSchedulePro", "BookingCreated", {"stat": "Sum", "period": 3600}]
+                ],
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 3600
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Custom Metrics - Reschedule Success Rate",
+                "metrics": [
+                  ["FlightSchedulePro", "RescheduleAttempt", "Success", "true", {"stat": "Sum", "period": 3600, "color": "#2ca02c"}],
+                  ["...", "false", {"stat": "Sum", "period": 3600, "color": "#d62728"}]
+                ],
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 3600
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Custom Metrics - Notifications",
+                "metrics": [
+                  ["FlightSchedulePro", "NotificationSent", {"stat": "Sum", "period": 3600}]
+                ],
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 3600
+              }
+            },
+            {
+              "type": "log",
+              "properties": {
+                "title": "Recent Error Logs",
+                "query": "SOURCE '/aws/lambda/${ProjectName}-${Environment}-api-handler'\n| fields @timestamp, @message, logType, functionName\n| filter logType = 'error'\n| sort @timestamp desc\n| limit 20",
+                "region": "${AWS::Region}"
               }
             }
           ]

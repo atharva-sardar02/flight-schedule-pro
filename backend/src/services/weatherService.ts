@@ -23,9 +23,25 @@ import { getWeatherConfig } from '../config/weather';
 import { weatherCache } from '../utils/weatherCache';
 import { calculateFlightPath, getWeatherCheckLocations } from '../utils/corridor';
 import logger from '../utils/logger';
+import { retryWithJitter, CircuitBreaker } from '../utils/retry';
 
 export class WeatherService {
   private config = getWeatherConfig();
+  private openWeatherMapCircuit: CircuitBreaker;
+  private weatherAPICircuit: CircuitBreaker;
+
+  constructor() {
+    // Initialize circuit breakers for each provider
+    this.openWeatherMapCircuit = new CircuitBreaker('OpenWeatherMap', {
+      failureThreshold: 5,
+      resetTimeout: 60000, // 1 minute
+    });
+
+    this.weatherAPICircuit = new CircuitBreaker('WeatherAPI', {
+      failureThreshold: 5,
+      resetTimeout: 60000,
+    });
+  }
 
   /**
    * Get weather for a single location
@@ -39,9 +55,14 @@ export class WeatherService {
       return cached;
     }
 
-    // Try OpenWeatherMap first (primary)
+    // Try OpenWeatherMap first (primary) with circuit breaker and retry
     try {
-      const data = await this.getWeatherFromOpenWeatherMap(coords);
+      const data = await this.openWeatherMapCircuit.execute(() =>
+        retryWithJitter(() => this.getWeatherFromOpenWeatherMap(coords), {
+          maxRetries: 2,
+          initialDelay: 500,
+        })
+      );
       weatherCache.set(coords, data);
       return data;
     } catch (error) {
@@ -50,9 +71,14 @@ export class WeatherService {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
 
-      // Fallback to WeatherAPI.com (secondary)
+      // Fallback to WeatherAPI.com (secondary) with circuit breaker and retry
       try {
-        const data = await this.getWeatherFromWeatherAPI(coords);
+        const data = await this.weatherAPICircuit.execute(() =>
+          retryWithJitter(() => this.getWeatherFromWeatherAPI(coords), {
+            maxRetries: 2,
+            initialDelay: 500,
+          })
+        );
         weatherCache.set(coords, data);
         return data;
       } catch (fallbackError) {

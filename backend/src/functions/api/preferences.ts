@@ -8,9 +8,18 @@ import { Pool } from 'pg';
 import { PreferenceRankingService } from '../../services/preferenceRankingService';
 import { RescheduleOptionsService } from '../../services/rescheduleOptionsService';
 import { requireAuth } from '../../middleware/auth';
-import { logInfo, logError } from '../../utils/logger';
+import {
+  logInfo,
+  logError,
+  logLambdaStart,
+  logLambdaEnd,
+  logAPICall,
+  startPerformanceTimer,
+  endPerformanceTimer,
+} from '../../utils/logger';
 import { isDeadlinePassed } from '../../utils/deadlineCalculator';
 import { auditLog } from '../../services/auditService';
+import { handleLambdaError } from '../../utils/lambdaErrorHandler';
 
 // Initialize database pool
 let pool: Pool;
@@ -37,56 +46,53 @@ function getPool(): Pool {
 export const preferencesHandler = async (
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> => {
-  console.log('Preferences API request:', {
-    path: event.path,
-    method: event.httpMethod,
-  });
+  const startTime = Date.now();
+  logLambdaStart('preferencesAPI', event);
 
   try {
     // Authenticate request
     const user = await requireAuth(event);
-    console.log('Authenticated user:', user);
 
     const dbPool = getPool();
     const method = event.httpMethod;
     const pathSegments = event.path.split('/').filter(Boolean);
 
+    startPerformanceTimer(`preferences_${method}_${event.path}`);
+
+    let result: APIGatewayProxyResult;
+
     // Route handling
     if (method === 'POST' && pathSegments.includes('submit')) {
       // POST /preferences/submit - Submit preference ranking
-      return await handleSubmitPreference(event, user, dbPool);
+      result = await handleSubmitPreference(event, user, dbPool);
     } else if (method === 'GET' && pathSegments.includes('booking')) {
       // GET /preferences/booking/:bookingId - Get preferences for a booking
-      return await handleGetPreferences(event, user, dbPool);
+      result = await handleGetPreferences(event, user, dbPool);
     } else if (method === 'GET' && pathSegments.includes('my')) {
       // GET /preferences/my/:bookingId - Get current user's preference
-      return await handleGetMyPreference(event, user, dbPool);
+      result = await handleGetMyPreference(event, user, dbPool);
     } else if (method === 'POST' && pathSegments.includes('escalate')) {
       // POST /preferences/escalate/:bookingId - Manual escalation (admin only)
-      return await handleManualEscalation(event, user, dbPool);
-    }
-
-    return {
-      statusCode: 404,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Not found' }),
-    };
-  } catch (error: any) {
-    console.error('Preferences route error:', error);
-
-    if (error.message === 'Unauthorized' || error.message === 'Invalid token') {
-      return {
-        statusCode: 401,
+      result = await handleManualEscalation(event, user, dbPool);
+    } else {
+      result = {
+        statusCode: 404,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Unauthorized' }),
+        body: JSON.stringify({ error: 'Not found' }),
       };
     }
 
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: error.message || 'Internal server error' }),
-    };
+    const duration = endPerformanceTimer(`preferences_${method}_${event.path}`);
+    logLambdaEnd('preferencesAPI', true, result.statusCode);
+    logAPICall(event.path, method, result.statusCode, duration);
+
+    return result;
+  } catch (error: any) {
+    return handleLambdaError(error, {
+      functionName: 'preferencesAPI',
+      event,
+      defaultStatusCode: error.message === 'Unauthorized' ? 401 : 500,
+    });
   }
 };
 

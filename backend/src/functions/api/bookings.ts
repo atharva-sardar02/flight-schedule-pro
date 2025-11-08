@@ -10,8 +10,15 @@ import {
   UpdateBookingRequest,
   BookingListFilters,
 } from '../../types/booking';
-import logger from '../../utils/logger';
+import logger, {
+  logLambdaStart,
+  logLambdaEnd,
+  logAPICall,
+  startPerformanceTimer,
+  endPerformanceTimer,
+} from '../../utils/logger';
 import { requireAuth } from '../../middleware/auth';
+import { handleLambdaError } from '../../utils/lambdaErrorHandler';
 
 /**
  * Main Lambda handler for booking operations
@@ -19,6 +26,9 @@ import { requireAuth } from '../../middleware/auth';
 export async function handler(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
+  const startTime = Date.now();
+  logLambdaStart('bookingsAPI', event);
+  
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
@@ -29,6 +39,7 @@ export async function handler(
   try {
     // Handle OPTIONS request (CORS preflight)
     if (event.httpMethod === 'OPTIONS') {
+      logLambdaEnd('bookingsAPI', true, 200);
       return {
         statusCode: 200,
         headers,
@@ -39,6 +50,8 @@ export async function handler(
     // Authenticate request
     const authResult = await requireAuth(event);
     if (!authResult.authorized) {
+      logLambdaEnd('bookingsAPI', false, 401);
+      logAPICall(event.path, event.httpMethod, 401, Date.now() - startTime);
       return authResult.response;
     }
 
@@ -48,55 +61,46 @@ export async function handler(
     const pathParams = event.pathParameters || {};
 
     logger.info('Booking request received', { path, method, userId: user.id });
+    startPerformanceTimer(`bookings_${method}_${path}`);
+
+    let result: APIGatewayProxyResult;
 
     // Route to appropriate handler
     if (path.endsWith('/bookings') && method === 'GET') {
-      return await handleListBookings(event, headers, user.id);
+      result = await handleListBookings(event, headers, user.id);
+    } else if (path.endsWith('/bookings') && method === 'POST') {
+      result = await handleCreateBooking(event, headers, user.id);
+    } else if (pathParams.id && method === 'GET') {
+      result = await handleGetBooking(pathParams.id, headers, user.id);
+    } else if (pathParams.id && method === 'PUT') {
+      result = await handleUpdateBooking(pathParams.id, event, headers, user.id);
+    } else if (pathParams.id && method === 'DELETE') {
+      result = await handleDeleteBooking(pathParams.id, headers, user.id);
+    } else if (pathParams.id && path.endsWith('/cancel') && method === 'POST') {
+      result = await handleCancelBooking(pathParams.id, headers, user.id);
+    } else {
+      // Route not found
+      result = {
+        statusCode: 404,
+        headers,
+        body: JSON.stringify({
+          error: 'Not Found',
+          message: `Route ${method} ${path} not found`,
+        }),
+      };
     }
 
-    if (path.endsWith('/bookings') && method === 'POST') {
-      return await handleCreateBooking(event, headers, user.id);
-    }
+    const duration = endPerformanceTimer(`bookings_${method}_${path}`);
+    logLambdaEnd('bookingsAPI', true, result.statusCode);
+    logAPICall(path, method, result.statusCode, duration);
 
-    if (pathParams.id && method === 'GET') {
-      return await handleGetBooking(pathParams.id, headers, user.id);
-    }
-
-    if (pathParams.id && method === 'PUT') {
-      return await handleUpdateBooking(pathParams.id, event, headers, user.id);
-    }
-
-    if (pathParams.id && method === 'DELETE') {
-      return await handleDeleteBooking(pathParams.id, headers, user.id);
-    }
-
-    if (pathParams.id && path.endsWith('/cancel') && method === 'POST') {
-      return await handleCancelBooking(pathParams.id, headers, user.id);
-    }
-
-    // Route not found
-    return {
-      statusCode: 404,
-      headers,
-      body: JSON.stringify({
-        error: 'Not Found',
-        message: `Route ${method} ${path} not found`,
-      }),
-    };
+    return result;
   } catch (error) {
-    logger.error('Booking handler error', {
-      error: error instanceof Error ? error.message : 'Unknown',
-      path: event.path,
+    return handleLambdaError(error, {
+      functionName: 'bookingsAPI',
+      event,
+      defaultStatusCode: 500,
     });
-
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        error: 'Internal Server Error',
-        message: 'An unexpected error occurred',
-      }),
-    };
   }
 }
 

@@ -6,14 +6,24 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import AuthService from '../../services/authService';
 import { LoginRequest, RegisterRequest, RefreshTokenRequest } from '../../types/user';
-import logger from '../../utils/logger';
+import logger, {
+  logLambdaStart,
+  logLambdaEnd,
+  logAPICall,
+  startPerformanceTimer,
+  endPerformanceTimer,
+} from '../../utils/logger';
 import { Pool } from 'pg';
 import { getDbPool } from '../../utils/db';
+import { handleLambdaError } from '../../utils/lambdaErrorHandler';
 
 /**
  * Main Lambda handler for authentication operations
  */
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const startTime = Date.now();
+  logLambdaStart('authAPI', event);
+  
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
@@ -24,6 +34,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
   try {
     // Handle OPTIONS request (CORS preflight)
     if (event.httpMethod === 'OPTIONS') {
+      logLambdaEnd('authAPI', true, 200);
       return {
         statusCode: 200,
         headers,
@@ -35,44 +46,42 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const method = event.httpMethod;
 
     logger.info('Auth request received', { path, method });
+    startPerformanceTimer(`auth_${method}_${path}`);
+
+    let result: APIGatewayProxyResult;
 
     // Route to appropriate handler
     if (path.endsWith('/login') && method === 'POST') {
-      return await handleLogin(event, headers);
+      result = await handleLogin(event, headers);
+    } else if (path.endsWith('/register') && method === 'POST') {
+      result = await handleRegister(event, headers);
+    } else if (path.endsWith('/refresh') && method === 'POST') {
+      result = await handleRefreshToken(event, headers);
+    } else if (path.endsWith('/me') && method === 'GET') {
+      result = await handleGetCurrentUser(event, headers);
+    } else {
+      // Route not found
+      result = {
+        statusCode: 404,
+        headers,
+        body: JSON.stringify({
+          error: 'Not Found',
+          message: `Route ${method} ${path} not found`,
+        }),
+      };
     }
 
-    if (path.endsWith('/register') && method === 'POST') {
-      return await handleRegister(event, headers);
-    }
+    const duration = endPerformanceTimer(`auth_${method}_${path}`);
+    logLambdaEnd('authAPI', true, result.statusCode);
+    logAPICall(path, method, result.statusCode, duration);
 
-    if (path.endsWith('/refresh') && method === 'POST') {
-      return await handleRefreshToken(event, headers);
-    }
-
-    if (path.endsWith('/me') && method === 'GET') {
-      return await handleGetCurrentUser(event, headers);
-    }
-
-    // Route not found
-    return {
-      statusCode: 404,
-      headers,
-      body: JSON.stringify({
-        error: 'Not Found',
-        message: `Route ${method} ${path} not found`,
-      }),
-    };
+    return result;
   } catch (error) {
-    logger.error('Auth handler error', { error, path: event.path });
-
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        error: 'Internal Server Error',
-        message: 'An unexpected error occurred',
-      }),
-    };
+    return handleLambdaError(error, {
+      functionName: 'authAPI',
+      event,
+      defaultStatusCode: 500,
+    });
   }
 }
 

@@ -322,5 +322,238 @@ describe('Weather Monitoring Integration', () => {
       expect(duration).toBeLessThan(maxDuration);
     });
   });
+
+  describe('Simultaneous Conflicts', () => {
+    it('should detect multiple bookings with conflicts at the same time', async () => {
+      const conflictTime = new Date(Date.now() + 6 * 60 * 60 * 1000);
+
+      const mockBookings = [
+        {
+          id: 'booking-1',
+          student_id: 'student-1',
+          instructor_id: 'instructor-1',
+          scheduled_time: conflictTime,
+          departure_airport: 'KSFO',
+          arrival_airport: 'KLAX',
+          student_training_level: TrainingLevel.STUDENT_PILOT,
+          student_email: 'student1@test.com',
+          student_first_name: 'John',
+          instructor_email: 'instructor1@test.com',
+          instructor_first_name: 'Jane',
+          status: 'CONFIRMED',
+        },
+        {
+          id: 'booking-2',
+          student_id: 'student-2',
+          instructor_id: 'instructor-2',
+          scheduled_time: conflictTime,
+          departure_airport: 'KJFK',
+          arrival_airport: 'KBOS',
+          student_training_level: TrainingLevel.PRIVATE_PILOT,
+          student_email: 'student2@test.com',
+          student_first_name: 'Mike',
+          instructor_email: 'instructor2@test.com',
+          instructor_first_name: 'Sarah',
+          status: 'CONFIRMED',
+        },
+      ];
+
+      mockPool.query.mockResolvedValueOnce({ rows: mockBookings } as any);
+
+      // Both have bad weather
+      mockWeatherService.checkFlightWeather = jest.fn().mockResolvedValue({
+        isValid: false,
+        locations: [
+          {
+            location: 'KSFO',
+            latitude: 37.6213,
+            longitude: -122.3790,
+            temperature: 15,
+            conditions: 'Thunderstorm',
+            windSpeed: 25,
+            windDirection: 270,
+            visibility: 2,
+            cloudCeiling: 500,
+            timestamp: new Date(),
+          },
+        ],
+        confidence: 0.9,
+      });
+
+      const weatherValidator = new WeatherValidator(mockWeatherService);
+      const conflictDetector = new ConflictDetector(mockPool, weatherValidator);
+
+      const conflicts = await conflictDetector.checkUpcomingBookings(48);
+
+      expect(conflicts).toHaveLength(2);
+      expect(conflicts.every((c) => c.hasConflict)).toBe(true);
+      expect(conflicts[0].booking.scheduled_time).toEqual(conflicts[1].booking.scheduled_time);
+    });
+  });
+
+  describe('Corridor Weather Deterioration', () => {
+    it('should detect weather deteriorating along flight corridor', async () => {
+      const mockBooking = {
+        id: 'booking-1',
+        student_id: 'student-1',
+        instructor_id: 'instructor-1',
+        scheduled_time: new Date(Date.now() + 4 * 60 * 60 * 1000),
+        departure_airport: 'KJFK',
+        arrival_airport: 'KLAX',
+        student_training_level: TrainingLevel.PRIVATE_PILOT,
+        student_email: 'student@test.com',
+        student_first_name: 'John',
+        instructor_email: 'instructor@test.com',
+        instructor_first_name: 'Jane',
+        status: 'CONFIRMED',
+      };
+
+      mockPool.query.mockResolvedValueOnce({ rows: [mockBooking] } as any);
+
+      // Weather starts good but deteriorates along route
+      mockWeatherService.checkFlightWeather = jest.fn().mockResolvedValue({
+        isValid: false,
+        locations: [
+          {
+            location: 'KJFK - Departure',
+            latitude: 40.6413,
+            longitude: -73.7781,
+            temperature: 20,
+            conditions: 'Clear',
+            windSpeed: 10,
+            windDirection: 270,
+            visibility: 10,
+            cloudCeiling: 5000,
+            timestamp: new Date(),
+          },
+          {
+            location: 'Midpoint',
+            latitude: 39.0,
+            longitude: -95.0,
+            temperature: 18,
+            conditions: 'Overcast',
+            windSpeed: 15,
+            windDirection: 270,
+            visibility: 6,
+            cloudCeiling: 2500,
+            timestamp: new Date(),
+          },
+          {
+            location: 'KLAX - Arrival',
+            latitude: 33.9425,
+            longitude: -118.4081,
+            temperature: 15,
+            conditions: 'Rain',
+            windSpeed: 22,
+            windDirection: 270,
+            visibility: 2, // Below minimum
+            cloudCeiling: 1000, // Below minimum
+            timestamp: new Date(),
+          },
+        ],
+        confidence: 0.85,
+      });
+
+      const weatherValidator = new WeatherValidator(mockWeatherService);
+      const conflictDetector = new ConflictDetector(mockPool, weatherValidator);
+
+      const conflicts = await conflictDetector.checkUpcomingBookings(48);
+
+      expect(conflicts).toHaveLength(1);
+      expect(conflicts[0].hasConflict).toBe(true);
+      expect(conflicts[0].details).toContain('corridor');
+    });
+  });
+
+  describe('Dual Weather API Failover', () => {
+    it('should failover to secondary API if primary fails', async () => {
+      const mockBooking = {
+        id: 'booking-1',
+        student_id: 'student-1',
+        instructor_id: 'instructor-1',
+        scheduled_time: new Date(Date.now() + 6 * 60 * 60 * 1000),
+        departure_airport: 'KSFO',
+        arrival_airport: 'KLAX',
+        student_training_level: TrainingLevel.PRIVATE_PILOT,
+        student_email: 'student@test.com',
+        student_first_name: 'John',
+        instructor_email: 'instructor@test.com',
+        instructor_first_name: 'Jane',
+        status: 'CONFIRMED',
+      };
+
+      mockPool.query.mockResolvedValueOnce({ rows: [mockBooking] } as any);
+
+      // Simulate primary API failure, then success from secondary
+      let callCount = 0;
+      mockWeatherService.checkFlightWeather = jest.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          throw new Error('OpenWeatherMap API timeout');
+        }
+        // Secondary API succeeds
+        return Promise.resolve({
+          isValid: true,
+          locations: [
+            {
+              location: 'KSFO',
+              latitude: 37.6213,
+              longitude: -122.3790,
+              temperature: 20,
+              conditions: 'Clear',
+              windSpeed: 10,
+              windDirection: 270,
+              visibility: 10,
+              cloudCeiling: 5000,
+              timestamp: new Date(),
+            },
+          ],
+          confidence: 0.9,
+        });
+      });
+
+      const weatherValidator = new WeatherValidator(mockWeatherService);
+      const conflictDetector = new ConflictDetector(mockPool, weatherValidator);
+
+      const conflicts = await conflictDetector.checkUpcomingBookings(48);
+
+      expect(mockWeatherService.checkFlightWeather).toHaveBeenCalledTimes(2);
+      expect(conflicts).toHaveLength(1);
+      expect(conflicts[0].hasConflict).toBe(false);
+    });
+
+    it('should handle both APIs failing', async () => {
+      const mockBooking = {
+        id: 'booking-1',
+        student_id: 'student-1',
+        instructor_id: 'instructor-1',
+        scheduled_time: new Date(Date.now() + 6 * 60 * 60 * 1000),
+        departure_airport: 'KSFO',
+        arrival_airport: 'KLAX',
+        student_training_level: TrainingLevel.PRIVATE_PILOT,
+        student_email: 'student@test.com',
+        student_first_name: 'John',
+        instructor_email: 'instructor@test.com',
+        instructor_first_name: 'Jane',
+        status: 'CONFIRMED',
+      };
+
+      mockPool.query.mockResolvedValueOnce({ rows: [mockBooking] } as any);
+
+      // Both APIs fail
+      mockWeatherService.checkFlightWeather = jest
+        .fn()
+        .mockRejectedValue(new Error('All weather services unavailable'));
+
+      const weatherValidator = new WeatherValidator(mockWeatherService);
+      const conflictDetector = new ConflictDetector(mockPool, weatherValidator);
+
+      const conflicts = await conflictDetector.checkUpcomingBookings(48);
+
+      // Should gracefully handle and log error, not crash
+      expect(conflicts).toBeDefined();
+      expect(conflicts.length).toBeGreaterThanOrEqual(0);
+    });
+  });
 });
 

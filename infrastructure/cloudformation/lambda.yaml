@@ -27,6 +27,39 @@ Parameters:
     Default: lambda-code.zip
 
 Resources:
+  # Dead Letter Queue for failed Lambda invocations
+  LambdaDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-${Environment}-lambda-dlq'
+      MessageRetentionPeriod: 1209600 # 14 days
+      VisibilityTimeout: 300
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Dead Letter Queue Alarm
+  DLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-dlq-messages'
+      AlarmDescription: Alert when messages appear in DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt LambdaDeadLetterQueue.QueueName
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ProjectName}-${Environment}-AlertTopic'
+      TreatMissingData: notBreaching
+
   # IAM Role for Lambda Execution
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -66,6 +99,10 @@ Resources:
                 Action:
                   - rds:DescribeDBInstances
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt LambdaDeadLetterQueue.Arn
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -82,6 +119,9 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
       MemorySize: 512
+      ReservedConcurrentExecutions: 10
+      DeadLetterConfig:
+        TargetArn: !GetAtt LambdaDeadLetterQueue.Arn
       Code:
         S3Bucket: !Ref LambdaCodeBucket
         S3Key: !Ref LambdaCodeKey

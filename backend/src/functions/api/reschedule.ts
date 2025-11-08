@@ -8,8 +8,20 @@ import { Pool } from 'pg';
 import { RescheduleEngine } from '../ai/rescheduleEngine';
 import { PreferenceRankingService } from '../../services/preferenceRankingService';
 import { RescheduleOptionsService } from '../../services/rescheduleOptionsService';
+import { WeatherService } from '../../services/weatherService';
+import { EmailService } from '../notifications/emailService';
 import { requireAuth } from '../../middleware/auth';
-import { logInfo, logError } from '../../utils/logger';
+import {
+  logInfo,
+  logError,
+  logLambdaStart,
+  logLambdaEnd,
+  logAPICall,
+  startPerformanceTimer,
+  endPerformanceTimer,
+} from '../../utils/logger';
+import { auditLog } from '../../services/auditService';
+import { handleLambdaError } from '../../utils/lambdaErrorHandler';
 
 // Initialize database pool
 let pool: Pool;
@@ -36,57 +48,54 @@ function getPool(): Pool {
 export const rescheduleHandler = async (
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> => {
-  console.log('Reschedule API request:', {
-    path: event.path,
-    method: event.httpMethod,
-  });
+  const startTime = Date.now();
+  logLambdaStart('rescheduleAPI', event);
 
   try {
     // Authenticate request
     const user = await requireAuth(event);
-    console.log('Authenticated user:', user);
 
     const dbPool = getPool();
     const method = event.httpMethod;
     const pathSegments = event.path.split('/').filter(Boolean);
 
+    startPerformanceTimer(`reschedule_${method}_${event.path}`);
+
+    let result: APIGatewayProxyResult;
+
     // Route handling
     if (pathSegments.includes('generate')) {
       // POST /reschedule/generate/:bookingId
-      return await handleGenerateOptions(event, user, dbPool);
+      result = await handleGenerateOptions(event, user, dbPool);
     } else if (pathSegments.includes('options')) {
       // GET /reschedule/options/:bookingId
-      return await handleGetOptions(event, user, dbPool);
+      result = await handleGetOptions(event, user, dbPool);
     } else if (pathSegments.includes('preferences')) {
       // POST /reschedule/preferences - Submit preferences
       // GET /reschedule/preferences/:bookingId - Get preferences
-      return await handlePreferences(event, user, dbPool);
+      result = await handlePreferences(event, user, dbPool);
     } else if (pathSegments.includes('confirm')) {
       // POST /reschedule/confirm/:bookingId - Confirm final selection
-      return await handleConfirmReschedule(event, user, dbPool);
-    }
-
-    return {
-      statusCode: 404,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Not found' }),
-    };
-  } catch (error: any) {
-    console.error('Reschedule route error:', error);
-
-    if (error.message === 'Unauthorized' || error.message === 'Invalid token') {
-      return {
-        statusCode: 401,
+      result = await handleConfirmReschedule(event, user, dbPool);
+    } else {
+      result = {
+        statusCode: 404,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Unauthorized' }),
+        body: JSON.stringify({ error: 'Not found' }),
       };
     }
 
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: error.message || 'Internal server error' }),
-    };
+    const duration = endPerformanceTimer(`reschedule_${method}_${event.path}`);
+    logLambdaEnd('rescheduleAPI', true, result.statusCode);
+    logAPICall(event.path, method, result.statusCode, duration);
+
+    return result;
+  } catch (error: any) {
+    return handleLambdaError(error, {
+      functionName: 'rescheduleAPI',
+      event,
+      defaultStatusCode: error.message === 'Unauthorized' ? 401 : 500,
+    });
   }
 };
 
@@ -237,7 +246,7 @@ async function handlePreferences(
 }
 
 /**
- * Confirm reschedule and update booking
+ * Confirm reschedule and update booking with weather re-validation
  */
 async function handleConfirmReschedule(
   event: APIGatewayProxyEvent,
@@ -253,6 +262,28 @@ async function handleConfirmReschedule(
         body: JSON.stringify({ error: 'Booking ID required' }),
       };
     }
+
+    // Get booking details
+    const bookingResult = await pool.query(
+      `SELECT b.*, 
+              s.email as student_email, s.name as student_name,
+              i.email as instructor_email, i.name as instructor_name
+       FROM bookings b
+       JOIN users s ON b.student_id = s.id
+       JOIN users i ON b.instructor_id = i.id
+       WHERE b.id = $1`,
+      [bookingId]
+    );
+
+    if (bookingResult.rows.length === 0) {
+      return {
+        statusCode: 404,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Booking not found' }),
+      };
+    }
+
+    const booking = bookingResult.rows[0];
 
     // Resolve final selection using instructor priority
     const preferenceService = new PreferenceRankingService(pool);
@@ -278,6 +309,58 @@ async function handleConfirmReschedule(
       };
     }
 
+    // RE-VALIDATE WEATHER before confirmation
+    logInfo('Re-validating weather before confirmation', {
+      bookingId,
+      newTime: selectedOption.suggestedDatetime,
+    });
+
+    const weatherService = new WeatherService();
+    const weatherValid = await weatherService.validateWeatherForFlight(
+      selectedOption.departureAirport,
+      selectedOption.arrivalAirport,
+      new Date(selectedOption.suggestedDatetime),
+      booking.training_level
+    );
+
+    if (!weatherValid.isValid) {
+      logInfo('Weather re-validation failed - option no longer suitable', {
+        bookingId,
+        newTime: selectedOption.suggestedDatetime,
+        reason: weatherValid.reason,
+      });
+
+      // Audit log
+      await auditLog(pool, {
+        entityType: 'booking',
+        entityId: bookingId,
+        action: 'reschedule_revalidation_failed',
+        userId: user.id,
+        metadata: {
+          selectedOptionId,
+          newTime: selectedOption.suggestedDatetime,
+          reason: weatherValid.reason,
+          weatherData: weatherValid.weatherData,
+        },
+      });
+
+      return {
+        statusCode: 409,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          error: 'Weather conditions no longer suitable',
+          reason: weatherValid.reason,
+          weatherData: weatherValid.weatherData,
+          requiresNewOptions: true,
+        }),
+      };
+    }
+
+    logInfo('Weather re-validation passed - proceeding with confirmation', {
+      bookingId,
+      newTime: selectedOption.suggestedDatetime,
+    });
+
     // Update booking with new time
     await pool.query(
       `UPDATE bookings
@@ -288,7 +371,52 @@ async function handleConfirmReschedule(
       [selectedOption.suggestedDatetime, bookingId]
     );
 
-    logInfo('Booking rescheduled successfully', {
+    // Audit log
+    await auditLog(pool, {
+      entityType: 'booking',
+      entityId: bookingId,
+      action: 'booking_rescheduled',
+      userId: user.id,
+      metadata: {
+        oldTime: booking.scheduled_time,
+        newTime: selectedOption.suggestedDatetime,
+        selectedOptionId,
+        weatherRevalidated: true,
+      },
+    });
+
+    // Send confirmation notifications
+    const emailService = new EmailService();
+    
+    // Notify student
+    await emailService.sendConfirmationEmail(
+      booking.student_email,
+      booking.student_name,
+      {
+        bookingId,
+        oldTime: new Date(booking.scheduled_time),
+        newTime: new Date(selectedOption.suggestedDatetime),
+        departureAirport: booking.departure_airport,
+        arrivalAirport: booking.arrival_airport,
+        aircraftType: booking.aircraft_id || 'TBD',
+      }
+    );
+
+    // Notify instructor
+    await emailService.sendConfirmationEmail(
+      booking.instructor_email,
+      booking.instructor_name,
+      {
+        bookingId,
+        oldTime: new Date(booking.scheduled_time),
+        newTime: new Date(selectedOption.suggestedDatetime),
+        departureAirport: booking.departure_airport,
+        arrivalAirport: booking.arrival_airport,
+        aircraftType: booking.aircraft_id || 'TBD',
+      }
+    );
+
+    logInfo('Booking rescheduled successfully with notifications sent', {
       bookingId,
       newTime: selectedOption.suggestedDatetime,
     });
@@ -299,6 +427,8 @@ async function handleConfirmReschedule(
       body: JSON.stringify({
         success: true,
         newScheduledTime: selectedOption.suggestedDatetime,
+        weatherRevalidated: true,
+        notificationsSent: true,
       }),
     };
   } catch (error: any) {

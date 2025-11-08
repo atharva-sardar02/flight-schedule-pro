@@ -100,10 +100,32 @@ export async function getMyPreference(bookingId: string): Promise<{
  */
 export async function confirmReschedule(bookingId: string): Promise<{
   success: boolean;
-  newScheduledTime: string;
+  newScheduledTime?: string;
+  weatherRevalidated?: boolean;
+  notificationsSent?: boolean;
+  error?: string;
+  requiresNewOptions?: boolean;
 }> {
-  const response = await api.post(`/reschedule/confirm/${bookingId}`);
-  return response.data;
+  try {
+    const response = await api.post(`/reschedule/confirm/${bookingId}`);
+    return {
+      success: true,
+      ...response.data,
+    };
+  } catch (error: any) {
+    if (error.response?.status === 409) {
+      // Weather re-validation failed
+      return {
+        success: false,
+        error: error.response.data.error || 'Weather conditions no longer suitable',
+        requiresNewOptions: error.response.data.requiresNewOptions || false,
+      };
+    }
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to confirm reschedule',
+    };
+  }
 }
 
 /**
