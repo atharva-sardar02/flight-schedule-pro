@@ -1,0 +1,65 @@
+{
+  "name": "flight-schedule-pro",
+  "version": "0.1.0",
+  "description": "Weather Cancellation & AI Rescheduling System for Flight Training",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install",
+    "dev:frontend": "cd frontend && npm run start",
+    "dev:backend": "cd backend && npm run dev",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "build:all": "npm run build:backend && npm run build:frontend",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test",
+    "test:unit": "npm run test:backend -- --testPathPattern=unit",
+    "test:integration": "cd backend && npm run test:integration",
+    "test:e2e": "npm run test -- --testPathPattern=e2e",
+    "test:coverage": "npm run test:backend -- --coverage && npm run test:frontend -- --coverage",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "cd backend && npm run lint",
+    "lint:frontend": "cd frontend && npm run lint",
+    "lint:fix": "npm run lint:backend -- --fix && npm run lint:frontend -- --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "deploy:staging": "./infrastructure/scripts/deploy-staging.sh",
+    "deploy:production": "./infrastructure/scripts/deploy-production.sh",
+    "clean": "rm -rf node_modules frontend/node_modules backend/node_modules frontend/build backend/dist"
+  },
+  "keywords": [
+    "flight-training",
+    "weather-monitoring",
+    "ai-scheduling",
+    "aviation",
+    "aws-lambda",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.13.0",
+    "@typescript-eslint/parser": "^8.13.0",
+    "eslint": "^9.14.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-org/flight-schedule-pro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/flight-schedule-pro/issues"
+  },
+  "homepage": "https://github.com/your-org/flight-schedule-pro#readme",
+  "license": "MIT"
+}
+

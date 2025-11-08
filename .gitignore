@@ -1,24 +1,18 @@
 # Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-.pnp
+/.pnp
 .pnp.js
 
-# Build outputs
-dist/
-build/
-*.tsbuildinfo
-*.js.map
-*.d.ts.map
-.cache/
+# Production builds
+/dist
+/build
+frontend/build/
+backend/dist/
 
-# TypeScript
-*.tsbuildinfo
-.tsbuildinfo
+# Testing
+/coverage
+*.lcov
+.nyc_output
 
 # Environment variables
 .env
@@ -26,296 +20,98 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
-.env.*.local
-
-# AWS
-.aws-sam/
-samconfig.toml
-.aws/
-*.pem
-*.key
-
-# Lambda
-.aws-sam/
-samconfig.toml
-*.zip
-lambda-packages/
-
-# Database
-*.sqlite
-*.sqlite3
-*.db
-pgdata/
-postgres-data/
-
-# Testing
-coverage/
-.nyc_output/
-*.lcov
-.jest/
 
 # Logs
-logs/
+logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
 lerna-debug.log*
-*.log.*
+pnpm-debug.log*
 
-# IDE and editors
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# AWS
+.aws-sam/
+samconfig.toml
+.serverless/
+*.zip
+cdk.out/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE & Editors
 .vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
-*.sublime-project
-*.sublime-workspace
-.project
-.classpath
-.settings/
-*.iml
-*.ipr
-*.iws
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-# OS files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-desktop.ini
+# TypeScript
+*.tsbuildinfo
+
+# Debug
+.webpack/
+.serverless-webpack/
 
 # Temporary files
 *.tmp
 *.temp
-*.bak
-*.backup
-*.old
-*.orig
-*.rej
-*.swp
-*.swo
-*~
-
-# Testing
-coverage/
-.nyc_output/
-test-results/
-playwright-report/
-test-results.xml
-junit.xml
+.cache/
 
 # CloudFormation
-*.template.bak
-*.template.backup
-cloudformation-outputs.json
+packaged-*.yaml
 
-# Serverless Framework
-.serverless/
-.serverless_plugins/
+# OS
+Thumbs.db
+.DS_Store
 
-# Terraform (if used)
-.terraform/
-*.tfstate
-*.tfstate.*
-.terraform.lock.hcl
+# Documentation builds
+docs/_build/
 
-# Docker
-docker-compose.override.yml
-.dockerignore
+# Package manager
+yarn.lock
+package-lock.json
+pnpm-lock.yaml
+
+# Secrets (extra protection)
+**/secrets.json
+**/credentials.json
+**/*.pem
+**/*.key
 
 # Local development
-.local/
-local/
-tmp/
-temp/
+.env.dev
+.local
 
-# Secrets and credentials (extra safety)
-secrets/
-*.secret
-*.pem
-*.key
-*.crt
-*.p12
-*.pfx
-id_rsa*
-id_dsa*
-*.ppk
+# Test artifacts
+.jest-cache/
+test-results/
+playwright-report/
 
-# Package manager lock files (optional - uncomment if you want to ignore)
-# package-lock.json
-# yarn.lock
-# pnpm-lock.yaml
-
-# Build artifacts
-*.egg
-*.egg-info/
-dist/
-build/
-*.pyc
-__pycache__/
-*.so
-*.dylib
-
-# CloudWatch logs (local)
+# CloudWatch logs
 cloudwatch-logs/
-*.log.gz
-
-# SAM CLI
-.aws-sam/
-samconfig.toml
 
 # CDK
-cdk.out/
-cdk.context.json
+*.js.map
+*.d.ts
 
-# Misc
-*.pid
-*.seed
-*.pid.lock
-.eslintcache
-.stylelintcache
-
-# Storybook
-storybook-static/
-
-# Vercel
-.vercel
-
-# Turbo
-.turbo
-
-# Sentry
-.sentryclirc
-
-# Local Netlify folder
-.netlify
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Optional stylelint cache
-.stylelintcache
-
-# Microbundle cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# parcel-bundler cache
-.parcel-cache
-
-# Next.js
-.next/
-out/
-
-# Nuxt.js
-.nuxt/
-dist/
-
-# Gatsby
-.cache/
-public/
-
-# Vue.js
-.vuepress/dist
-
-# Serverless directories
-.serverless/
-
-# FuseBox cache
-.fusebox/
-
-# DynamoDB Local files
-.dynamodb/
-
-# TernJS port file
-.tern-port
-
-# Stores VSCode versions used for testing VSCode extensions
-.vscode-test
-
-# yarn v2
-.yarn/cache
-.yarn/unplugged
-.yarn/build-state.yml
-.yarn/install-state.gz
-.pnp.*
-
-# IntelliJ IDEA
-.idea/
-*.iml
-*.iws
-*.ipr
-out/
-
-# VS Code
-.vscode/
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-.history/
-
-# MacOS
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon
-._*
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# Windows
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-*.stackdump
-[Dd]esktop.ini
-$RECYCLE.BIN/
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-*.lnk
-
-# Linux
-*~
-.fuse_hidden*
-.directory
-.Trash-*
-.nfs*
-
-# Project specific
-# Add any project-specific files/folders here
-
+# Backup files
+*.backup
+*.bak
