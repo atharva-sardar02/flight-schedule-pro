@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAvailability } from '../../hooks/useAvailability';
+import { useAuth } from '../../hooks/useAuth';
 import { DayOfWeek, getDayName, RecurringAvailability as RecurringAvailabilityType } from '../../types/availability';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -13,7 +14,11 @@ import { Label } from '../ui/label';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Trash2, Plus, Edit2, Check, X } from 'lucide-react';
 
-export const RecurringAvailability: React.FC = () => {
+interface RecurringAvailabilityProps {
+  onPatternChange?: () => void;
+}
+
+export const RecurringAvailability: React.FC<RecurringAvailabilityProps> = ({ onPatternChange }) => {
   const {
     recurringPatterns,
     loading,
@@ -23,7 +28,10 @@ export const RecurringAvailability: React.FC = () => {
     updateRecurringPattern,
     deleteRecurringPattern,
     clearError,
+    fetchAvailability,
   } = useAvailability();
+  
+  const { user } = useAuth();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -43,6 +51,10 @@ export const RecurringAvailability: React.FC = () => {
       await createRecurringPattern(formData);
       setShowForm(false);
       setFormData({ dayOfWeek: DayOfWeek.MONDAY, startTime: '09:00', endTime: '17:00' });
+      // Refresh calendar view if user is available
+      if (user && onPatternChange) {
+        onPatternChange();
+      }
     } catch (err) {
       // Error handled by hook
     }
@@ -51,6 +63,10 @@ export const RecurringAvailability: React.FC = () => {
   const handleToggleActive = async (pattern: RecurringAvailabilityType) => {
     try {
       await updateRecurringPattern(pattern.id, { isActive: !pattern.isActive });
+      // Refresh calendar view
+      if (user && onPatternChange) {
+        onPatternChange();
+      }
     } catch (err) {
       // Error handled by hook
     }
@@ -60,6 +76,10 @@ export const RecurringAvailability: React.FC = () => {
     if (window.confirm('Are you sure you want to delete this availability pattern?')) {
       try {
         await deleteRecurringPattern(id);
+        // Refresh calendar view
+        if (user && onPatternChange) {
+          onPatternChange();
+        }
       } catch (err) {
         // Error handled by hook
       }

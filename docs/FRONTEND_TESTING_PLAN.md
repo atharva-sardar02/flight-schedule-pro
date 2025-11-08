@@ -25,6 +25,7 @@ This document provides a step-by-step plan to test all major user flows in the F
    - PostgreSQL should be running
    - Database should be initialized with migrations
    - Seed data should be loaded (optional but helpful)
+   - **See**: `docs/DATABASE_SETUP_WINDOWS.md` for detailed setup instructions
 
 4. **Environment Variables**
    - Check `.env` file in backend has all required variables

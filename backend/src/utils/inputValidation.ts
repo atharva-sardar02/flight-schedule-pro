@@ -177,12 +177,16 @@ export function sanitizeNumber(value: any): number | null {
 export function validateCreateBookingRequest(data: any): ValidationResult {
   const errors: string[] = [];
 
-  if (!data.studentId || !isValidUUID(data.studentId)) {
-    errors.push('Invalid or missing studentId (must be UUID)');
+  // Trim string values to remove whitespace
+  const studentId = typeof data.studentId === 'string' ? data.studentId.trim() : data.studentId;
+  const instructorId = typeof data.instructorId === 'string' ? data.instructorId.trim() : data.instructorId;
+
+  if (!studentId || !isValidUUID(studentId)) {
+    errors.push('Invalid or missing studentId (must be UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)');
   }
 
-  if (!data.instructorId || !isValidUUID(data.instructorId)) {
-    errors.push('Invalid or missing instructorId (must be UUID)');
+  if (!instructorId || !isValidUUID(instructorId)) {
+    errors.push('Invalid or missing instructorId (must be UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)');
   }
 
   if (!data.departureAirport || !isValidAirportCode(data.departureAirport)) {
@@ -223,8 +227,12 @@ export function validateCreateBookingRequest(data: any): ValidationResult {
     errors.push('Invalid durationMinutes (must be between 15 and 480)');
   }
 
-  if (data.aircraftId && !isValidTailNumber(data.aircraftId)) {
-    errors.push('Invalid aircraftId (must be valid N-number)');
+  // aircraftId is optional, but if provided must be valid
+  const aircraftId = typeof data.aircraftId === 'string' ? data.aircraftId.trim() : data.aircraftId;
+  if (aircraftId !== undefined && aircraftId !== null && aircraftId !== '') {
+    if (typeof aircraftId !== 'string' || !isValidTailNumber(aircraftId)) {
+      errors.push(`Invalid aircraftId "${aircraftId}" (must be valid N-number format: N followed by 1-5 digits, optionally 0-2 letters, e.g., N12345 or N123AB)`);
+    }
   }
 
   return {

@@ -5,6 +5,20 @@
 
 ## 🚀 Setup (One-Time)
 
+0. **Setup Database** (First Time Only)
+   - PostgreSQL must be installed and running
+   - **See**: `docs/DATABASE_SETUP_WINDOWS.md` for complete instructions
+   - Quick commands:
+     ```powershell
+     # Create database
+     $env:PGPASSWORD = "your_password"
+     & "C:\Program Files\PostgreSQL\18\bin\createdb.exe" -U postgres flight_schedule_pro
+     
+     # Run migrations (see DATABASE_SETUP_WINDOWS.md for full list)
+     & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d flight_schedule_pro -f database\migrations\001_create_users_table.sql
+     # ... (run all migrations in order)
+     ```
+
 1. **Start Backend**
    ```bash
    cd backend

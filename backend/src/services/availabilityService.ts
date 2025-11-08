@@ -53,7 +53,7 @@ export class AvailabilityService {
     }
 
     const result = await this.pool.query(
-      `INSERT INTO recurring_availability (user_id, day_of_week, start_time, end_time)
+      `INSERT INTO availability_patterns (user_id, day_of_week, start_time, end_time)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
       [userId, data.dayOfWeek, data.startTime, data.endTime]
@@ -67,7 +67,7 @@ export class AvailabilityService {
    */
   async getRecurringAvailability(userId: string): Promise<RecurringAvailability[]> {
     const result = await this.pool.query(
-      `SELECT * FROM recurring_availability WHERE user_id = $1 ORDER BY day_of_week, start_time`,
+      `SELECT * FROM availability_patterns WHERE user_id = $1 ORDER BY day_of_week, start_time`,
       [userId]
     );
 
@@ -88,7 +88,7 @@ export class AvailabilityService {
 
     // Get existing pattern
     const existing = await this.pool.query(
-      `SELECT * FROM recurring_availability WHERE id = $1 AND user_id = $2`,
+      `SELECT * FROM availability_patterns WHERE id = $1 AND user_id = $2`,
       [id, userId]
     );
 
@@ -146,7 +146,7 @@ export class AvailabilityService {
     values.push(id, userId);
 
     const result = await this.pool.query(
-      `UPDATE recurring_availability
+      `UPDATE availability_patterns
        SET ${updates.join(', ')}
        WHERE id = $${valueIndex} AND user_id = $${valueIndex + 1}
        RETURNING *`,
@@ -161,7 +161,7 @@ export class AvailabilityService {
    */
   async deleteRecurringAvailability(id: string, userId: string): Promise<void> {
     const result = await this.pool.query(
-      `DELETE FROM recurring_availability WHERE id = $1 AND user_id = $2`,
+      `DELETE FROM availability_patterns WHERE id = $1 AND user_id = $2`,
       [id, userId]
     );
 
@@ -343,7 +343,11 @@ export class AvailabilityService {
 
     // Group overrides by date
     overrides.forEach((override) => {
-      const dateKey = new Date(override.overrideDate).toISOString().split('T')[0];
+      // Handle both Date objects and date strings
+      const overrideDate = override.overrideDate instanceof Date 
+        ? override.overrideDate 
+        : new Date(override.overrideDate);
+      const dateKey = overrideDate.toISOString().split('T')[0];
       if (!overrideMap.has(dateKey)) {
         overrideMap.set(dateKey, []);
       }
@@ -362,8 +366,12 @@ export class AvailabilityService {
       if (dayOverrides.length > 0) {
         // Overrides take precedence
         dayOverrides.forEach((override) => {
+          // Handle both Date objects and date strings
+          const overrideDate = override.overrideDate instanceof Date 
+            ? override.overrideDate 
+            : new Date(override.overrideDate);
           slots.push({
-            date: new Date(override.overrideDate),
+            date: overrideDate,
             startTime: override.startTime || '00:00',
             endTime: override.endTime || '23:59',
             isAvailable: !override.isBlocked,
@@ -409,7 +417,7 @@ export class AvailabilityService {
     excludeId?: string
   ): Promise<AvailabilityConflict> {
     let query = `
-      SELECT * FROM recurring_availability
+      SELECT * FROM availability_patterns
       WHERE user_id = $1
         AND day_of_week = $2
         AND is_active = true

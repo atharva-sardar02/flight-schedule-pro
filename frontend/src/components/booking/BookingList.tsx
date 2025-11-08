@@ -4,32 +4,72 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import BookingService from '../../services/booking';
 import { Booking, BookingStatus, BookingListFilters } from '../../types/booking';
 import { TrainingLevel } from '../../types/weather';
+import { BookingsCalendar } from './BookingsCalendar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Calendar, List } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function BookingList() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [filters, setFilters] = useState<BookingListFilters>({
-    limit: 20, // Default page size
+    limit: 100, // Load more for calendar view
     offset: 0,
   });
   const [totalCount, setTotalCount] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const pageSize = filters.limit || 20;
+  
+  // Date range for calendar view
+  const [dateRange, setDateRange] = useState({
+    startDate: (() => {
+      const date = new Date();
+      date.setDate(date.getDate() - 7); // Start 7 days ago
+      return date;
+    })(),
+    endDate: (() => {
+      const date = new Date();
+      date.setDate(date.getDate() + 30); // End 30 days from now
+      return date;
+    })(),
+  });
 
   useEffect(() => {
-    loadBookings();
-  }, [filters]);
+    if (user) {
+      loadBookings();
+    }
+  }, [filters, user]);
 
   const loadBookings = async () => {
+    if (!user) return;
+    
     try {
       setLoading(true);
       setError(null);
-      const data = await BookingService.listBookings(filters);
+      
+      // Filter bookings by current user's role
+      const userFilters: BookingListFilters = {
+        ...filters,
+      };
+      
+      // If user is a student, filter by studentId
+      // If user is an instructor, filter by instructorId
+      if (user.role === 'STUDENT' || user.role === 'student') {
+        userFilters.studentId = user.id;
+      } else if (user.role === 'INSTRUCTOR' || user.role === 'instructor') {
+        userFilters.instructorId = user.id;
+      }
+      // Admins can see all bookings (no filter)
+      
+      const data = await BookingService.listBookings(userFilters);
       setBookings(data);
       // If we got fewer results than requested, we're on the last page
       if (data.length < pageSize) {
@@ -91,6 +131,10 @@ export default function BookingList() {
     );
   }
 
+  const handleBookingClick = (booking: Booking) => {
+    navigate(`/bookings/${booking.id}`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -103,6 +147,19 @@ export default function BookingList() {
         </Link>
       </div>
 
+      <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'list' | 'calendar')}>
+        <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+          <TabsTrigger value="list">
+            <List className="w-4 h-4 mr-2" />
+            List View
+          </TabsTrigger>
+          <TabsTrigger value="calendar">
+            <Calendar className="w-4 h-4 mr-2" />
+            Calendar View
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="list" className="space-y-6">
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -216,7 +273,11 @@ export default function BookingList() {
               </tr>
             ) : (
               bookings.map((booking) => (
-                <tr key={booking.id} className="hover:bg-gray-50">
+                <tr
+                  key={booking.id}
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => navigate(`/bookings/${booking.id}`)}
+                >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
                       {booking.departureAirport} → {booking.arrivalAirport}
@@ -249,6 +310,7 @@ export default function BookingList() {
                     <Link
                       to={`/bookings/${booking.id}`}
                       className="text-blue-600 hover:text-blue-900"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       View
                     </Link>
@@ -313,6 +375,40 @@ export default function BookingList() {
           </div>
         </div>
       )}
+        </TabsContent>
+
+        <TabsContent value="calendar" className="space-y-6">
+          {loading ? (
+            <div className="flex justify-center items-center p-8">
+              <div className="text-gray-600">Loading bookings...</div>
+            </div>
+          ) : error ? (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
+          ) : (
+            <>
+              {bookings.length === 0 ? (
+                <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded">
+                  No bookings found. Create a booking to see it on the calendar.
+                </div>
+              ) : (
+                <>
+                  <div className="text-sm text-gray-600 mb-2">
+                    Showing {bookings.length} booking(s) from {dateRange.startDate.toLocaleDateString()} to {dateRange.endDate.toLocaleDateString()}
+                  </div>
+                  <BookingsCalendar
+                    bookings={bookings}
+                    startDate={dateRange.startDate}
+                    endDate={dateRange.endDate}
+                    onBookingClick={handleBookingClick}
+                  />
+                </>
+              )}
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -4,7 +4,6 @@
  */
 
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { Pool } from 'pg';
 import { AvailabilityService } from '../../services/availabilityService';
 import { requireAuth } from '../../middleware/auth';
 import {
@@ -14,46 +13,33 @@ import {
   startPerformanceTimer,
   endPerformanceTimer,
 } from '../../utils/logger';
+import logger from '../../utils/logger';
 import { handleLambdaError } from '../../utils/lambdaErrorHandler';
 import {
   validateRecurringAvailabilityRequest,
   validateAvailabilityOverrideRequest,
   validateUUIDParam,
 } from '../../utils/inputValidation';
-
-// Initialize database pool
-let pool: Pool;
-
-function getPool(): Pool {
-  if (!pool) {
-    pool = new Pool({
-      host: process.env.DB_HOST,
-      port: parseInt(process.env.DB_PORT || '5432'),
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-    });
-  }
-  return pool;
-}
+import { getDbPool } from '../../utils/db';
 
 /**
  * Main handler for availability API requests
  */
 export const availabilityHandler = async (
   event: APIGatewayProxyEvent
-): Promise<APIGatewayProxyResult> {
+): Promise<APIGatewayProxyResult> => {
   const startTime = Date.now();
   logLambdaStart('availabilityAPI', event);
 
   try {
     // Authenticate request
-    const user = await requireAuth(event);
+    const authResult = await requireAuth(event);
+    if (!authResult.authorized) {
+      return authResult.response;
+    }
+    const user = authResult.user;
 
-    const availabilityService = new AvailabilityService(getPool());
+    const availabilityService = new AvailabilityService(getDbPool());
     const method = event.httpMethod;
     const pathSegments = event.path.split('/').filter(Boolean);
 
@@ -83,6 +69,15 @@ export const availabilityHandler = async (
 
     return result;
   } catch (error: any) {
+    // Log detailed error information
+    console.error('=== AVAILABILITY API ERROR ===');
+    console.error('Error type:', error?.constructor?.name);
+    console.error('Error message:', error?.message);
+    console.error('Error code:', error?.code);
+    console.error('Error stack:', error?.stack);
+    console.error('Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    console.error('=============================');
+    
     return handleLambdaError(error, {
       functionName: 'availabilityAPI',
       event,
@@ -319,42 +314,91 @@ async function handleGetAvailability(
   user: any,
   service: AvailabilityService
 ): Promise<APIGatewayProxyResult> {
-  // GET /availability?userId=xxx&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
-  const queryUserId = event.queryStringParameters?.userId || user.id;
-  const startDate = event.queryStringParameters?.startDate;
-  const endDate = event.queryStringParameters?.endDate;
+  try {
+    // GET /availability?userId=xxx&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+    const queryUserId = event.queryStringParameters?.userId || user.id;
+    const startDate = event.queryStringParameters?.startDate;
+    const endDate = event.queryStringParameters?.endDate;
 
-  if (!startDate || !endDate) {
+    if (!startDate || !endDate) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'startDate and endDate query parameters required' }),
+      };
+    }
+
+    // Validate date range (max 90 days)
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+
+    if (diffDays > 90) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Date range cannot exceed 90 days' }),
+      };
+    }
+
+    const availability = await service.getAvailability({
+      userId: queryUserId,
+      startDate,
+      endDate,
+    });
+
+    // Serialize dates to ISO strings for JSON response
+    const serializedAvailability = {
+      ...availability,
+      slots: availability.slots.map((slot) => ({
+        ...slot,
+        date: slot.date instanceof Date ? slot.date.toISOString().split('T')[0] : slot.date,
+      })),
+      recurringPatterns: availability.recurringPatterns.map((pattern) => ({
+        ...pattern,
+        createdAt: pattern.createdAt instanceof Date ? pattern.createdAt.toISOString() : pattern.createdAt,
+        updatedAt: pattern.updatedAt instanceof Date ? pattern.updatedAt.toISOString() : pattern.updatedAt,
+      })),
+      overrides: availability.overrides.map((override) => ({
+        ...override,
+        overrideDate: override.overrideDate instanceof Date 
+          ? override.overrideDate.toISOString().split('T')[0] 
+          : override.overrideDate,
+        createdAt: override.createdAt instanceof Date ? override.createdAt.toISOString() : override.createdAt,
+      })),
+    };
+
     return {
-      statusCode: 400,
+      statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'startDate and endDate query parameters required' }),
+      body: JSON.stringify(serializedAvailability),
+    };
+  } catch (error: any) {
+    const errorMessage = error?.message || String(error);
+    const errorStack = error?.stack || 'No stack trace';
+    
+    logger.error('Get availability failed', {
+      error: errorMessage,
+      stack: errorStack,
+      userId: user.id,
+      queryParams: event.queryStringParameters,
+      errorType: error?.constructor?.name,
+      errorCode: error?.code,
+    });
+
+    console.error('Full error object:', error);
+    console.error('Error message:', errorMessage);
+    console.error('Error stack:', errorStack);
+
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        error: 'Failed to get availability',
+        message: errorMessage || 'Internal server error',
+        ...(process.env.NODE_ENV === 'development' && { stack: errorStack }),
+      }),
     };
   }
-
-  // Validate date range (max 90 days)
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-
-  if (diffDays > 90) {
-    return {
-      statusCode: 400,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Date range cannot exceed 90 days' }),
-    };
-  }
-
-  const availability = await service.getAvailability({
-    userId: queryUserId,
-    startDate,
-    endDate,
-  });
-
-  return {
-    statusCode: 200,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(availability),
-  };
 }
 

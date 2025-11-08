@@ -6,11 +6,11 @@
 -- ============================================================================
 
 -- Indexes for bookings table (most frequently queried)
-CREATE INDEX IF NOT EXISTS idx_bookings_scheduled_time ON bookings(scheduled_time);
+CREATE INDEX IF NOT EXISTS idx_bookings_scheduled_datetime ON bookings(scheduled_datetime);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
 CREATE INDEX IF NOT EXISTS idx_bookings_student_id ON bookings(student_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_instructor_id ON bookings(instructor_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_status_scheduled_time ON bookings(status, scheduled_time);
+CREATE INDEX IF NOT EXISTS idx_bookings_status_scheduled_datetime ON bookings(status, scheduled_datetime);
 CREATE INDEX IF NOT EXISTS idx_bookings_student_status ON bookings(student_id, status);
 CREATE INDEX IF NOT EXISTS idx_bookings_instructor_status ON bookings(instructor_id, status);
 
@@ -42,8 +42,8 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_log_event_type ON audit_log(event_type, timestamp DESC);
 
--- Composite index for common booking queries (status + scheduled_time range)
-CREATE INDEX IF NOT EXISTS idx_bookings_status_time_range ON bookings(status, scheduled_time) 
+-- Composite index for common booking queries (status + scheduled_datetime range)
+CREATE INDEX IF NOT EXISTS idx_bookings_status_time_range ON bookings(status, scheduled_datetime) 
   WHERE status IN ('CONFIRMED', 'AT_RISK', 'WEATHER_CONFLICT');
 
 -- Partial index for active availability patterns
@@ -51,8 +51,8 @@ CREATE INDEX IF NOT EXISTS idx_availability_patterns_active_user ON availability
   WHERE is_active = true;
 
 -- Index for upcoming bookings (used by weather monitor)
-CREATE INDEX IF NOT EXISTS idx_bookings_upcoming ON bookings(scheduled_time)
-  WHERE scheduled_time > NOW() AND status IN ('CONFIRMED', 'AT_RISK');
+CREATE INDEX IF NOT EXISTS idx_bookings_upcoming ON bookings(scheduled_datetime)
+  WHERE scheduled_datetime > NOW() AND status IN ('CONFIRMED', 'AT_RISK');
 
 -- Analyze tables to update statistics
 ANALYZE bookings;

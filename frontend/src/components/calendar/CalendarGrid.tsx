@@ -5,15 +5,17 @@
 
 import React from 'react';
 import { AvailabilitySlot } from '../../types/availability';
+import { Booking } from '../../types/booking';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 
 interface CalendarGridProps {
   slots: AvailabilitySlot[];
   startDate: Date;
   endDate: Date;
+  bookings?: Booking[];
 }
 
-export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, endDate }) => {
+export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, endDate, bookings = [] }) => {
   // Generate all dates in range
   const generateDateRange = (): Date[] => {
     const dates: Date[] = [];
@@ -35,6 +37,62 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, en
     acc[dateKey].push(slot);
     return acc;
   }, {} as Record<string, AvailabilitySlot[]>);
+
+  // Convert bookings to blocked slots and group by date
+  const bookingSlotsByDate = bookings.reduce((acc, booking) => {
+    try {
+      const bookingDate = new Date(booking.scheduledDatetime);
+      if (isNaN(bookingDate.getTime())) {
+        console.warn('Invalid booking date:', booking.scheduledDatetime, booking.id);
+        return acc;
+      }
+      const dateKey = bookingDate.toISOString().split('T')[0];
+      
+      // Calculate end time from duration
+      const endTime = new Date(bookingDate);
+      endTime.setMinutes(endTime.getMinutes() + (booking.durationMinutes || 60));
+      
+      // Format time as HH:MM
+      const formatTime = (date: Date): string => {
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${hours}:${minutes}`;
+      };
+      
+      // Create a blocked slot for this booking
+      const bookingSlot: AvailabilitySlot = {
+        date: dateKey,
+        startTime: formatTime(bookingDate),
+        endTime: formatTime(endTime),
+        isAvailable: false,
+        source: 'override', // Use override source to indicate it's from a booking
+        reason: `${booking.departureAirport} → ${booking.arrivalAirport}`,
+      };
+      
+      if (!acc[dateKey]) acc[dateKey] = [];
+      acc[dateKey].push(bookingSlot);
+    } catch (error) {
+      console.error('Error processing booking for calendar:', booking.id, error);
+    }
+    return acc;
+  }, {} as Record<string, AvailabilitySlot[]>);
+
+  // Merge availability slots with booking slots (bookings take precedence as blocked)
+  const allSlotsByDate: Record<string, AvailabilitySlot[]> = {};
+  
+  // First, add all availability slots
+  Object.keys(slotsByDate).forEach(dateKey => {
+    allSlotsByDate[dateKey] = [...slotsByDate[dateKey]];
+  });
+  
+  // Then, add booking slots (these will show as blocked)
+  Object.keys(bookingSlotsByDate).forEach(dateKey => {
+    if (!allSlotsByDate[dateKey]) {
+      allSlotsByDate[dateKey] = [];
+    }
+    // Add booking slots - they represent blocked times
+    allSlotsByDate[dateKey].push(...bookingSlotsByDate[dateKey]);
+  });
 
   const formatDate = (date: Date) => {
     return date.toISOString().split('T')[0];
@@ -98,7 +156,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, en
           {weeks.map((week, weekIndex) =>
             week.map((date, dayIndex) => {
               const dateKey = formatDate(date);
-              const daySlots = slotsByDate[dateKey] || [];
+              const daySlots = allSlotsByDate[dateKey] || [];
               const isInRange = date >= startDate && date <= endDate;
               const availableSlots = daySlots.filter((slot) => slot.isAvailable);
               const blockedSlots = daySlots.filter((slot) => !slot.isAvailable);
@@ -130,7 +188,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, en
                             {slot.startTime} - {slot.endTime}
                           </div>
                           {slot.reason && (
-                            <div className="truncate" title={slot.reason}>
+                            <div className="truncate font-semibold" title={slot.reason}>
                               {slot.reason}
                             </div>
                           )}

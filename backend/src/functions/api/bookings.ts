@@ -184,6 +184,11 @@ async function handleCreateBooking(
 
     const data: CreateBookingRequest = JSON.parse(event.body);
 
+    // Trim string fields to remove whitespace
+    if (data.studentId) data.studentId = String(data.studentId).trim();
+    if (data.instructorId) data.instructorId = String(data.instructorId).trim();
+    if (data.aircraftId) data.aircraftId = String(data.aircraftId).trim();
+
     // Validate input
     const validation = validateCreateBookingRequest(data);
     if (!validation.valid) {

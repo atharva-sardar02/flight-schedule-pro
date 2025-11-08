@@ -328,13 +328,21 @@ export default function BookingDetails() {
         <div className="flex flex-wrap gap-4">
           {booking.status !== BookingStatus.CANCELLED &&
             booking.status !== BookingStatus.COMPLETED && (
-              <button
-                onClick={handleCancel}
-                disabled={actionLoading}
-                className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:opacity-50"
-              >
-                {actionLoading ? 'Processing...' : 'Cancel Booking'}
-              </button>
+              <>
+                <Link
+                  to={`/bookings/${booking.id}/reschedule`}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Reschedule Flight
+                </Link>
+                <button
+                  onClick={handleCancel}
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:opacity-50"
+                >
+                  {actionLoading ? 'Processing...' : 'Cancel Booking'}
+                </button>
+              </>
             )}
 
           <button

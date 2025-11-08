@@ -8,6 +8,9 @@ import { handler as bookingsHandler } from './functions/api/bookings';
 import { availabilityHandler } from './functions/api/availability';
 import { rescheduleHandler } from './functions/api/reschedule';
 import { preferencesHandler } from './functions/api/preferences';
+import { AdminConfirmSignUpCommand, CognitoIdentityProviderClient } from '@aws-sdk/client-cognito-identity-provider';
+import AuthService from './services/authService';
+import { getDbPool } from './utils/db';
 
 // Load environment variables from .env file in project root
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -47,6 +50,93 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Development-only: Confirm user endpoint (for testing)
+  if (process.env.NODE_ENV === 'development') {
+    app.post('/dev/confirm-user', async (req, res) => {
+      try {
+        const { email } = req.body;
+        if (!email) {
+          return res.status(400).json({ error: 'Email is required' });
+        }
+
+        const client = new CognitoIdentityProviderClient({
+          region: process.env.AWS_REGION || 'us-east-1',
+        });
+
+        const command = new AdminConfirmSignUpCommand({
+          UserPoolId: process.env.COGNITO_USER_POOL_ID!,
+          Username: email,
+        });
+
+        await client.send(command);
+        logger.info('User confirmed via dev endpoint', { email });
+        res.json({ success: true, message: `User ${email} confirmed successfully` });
+      } catch (error: any) {
+        logger.error('Failed to confirm user', { error });
+        res.status(500).json({ error: error.message || 'Failed to confirm user' });
+      }
+    });
+
+    // Sync current user from Cognito to database
+    app.post('/dev/sync-user', async (req, res) => {
+      try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+          return res.status(401).json({ error: 'Authorization header required' });
+        }
+
+        const token = authHeader.split(' ')[1];
+        if (!token) {
+          return res.status(401).json({ error: 'Token required' });
+        }
+
+        // Get user from Cognito
+        const user = await AuthService.verifyToken(token);
+
+        // Check if user exists in database
+        const pool = getDbPool();
+        const existingUser = await pool.query(
+          'SELECT id FROM users WHERE cognito_user_id = $1',
+          [user.id]
+        );
+
+        if (existingUser.rows.length > 0) {
+          return res.json({
+            success: true,
+            message: 'User already exists in database',
+            userId: existingUser.rows[0].id,
+          });
+        }
+
+        // Create user record in database
+        const result = await pool.query(
+          `INSERT INTO users (cognito_user_id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+           RETURNING id`,
+          [
+            user.id,
+            user.email,
+            user.firstName,
+            user.lastName,
+            user.phoneNumber || null,
+            user.role,
+            user.trainingLevel || null,
+          ]
+        );
+
+        logger.info('User synced to database', { userId: result.rows[0].id, email: user.email });
+        res.json({
+          success: true,
+          message: 'User synced to database successfully',
+          userId: result.rows[0].id,
+        });
+      } catch (error: any) {
+        logger.error('Failed to sync user', { error });
+        res.status(500).json({ error: error.message || 'Failed to sync user' });
+      }
+    });
+  }
 
 // API Routes (will be added as we build features)
 app.get('/api', (req, res) => {

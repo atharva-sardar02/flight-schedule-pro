@@ -8,7 +8,7 @@
 -- Note: Uses user IDs from dev_users.sql seed file
 -- Coordinates are for example airports (KJFK, KLAX, KORD)
 
--- Confirmed booking (Student Pilot)
+-- Confirmed booking (Student Pilot) - Idempotent
 INSERT INTO bookings (
     id, student_id, instructor_id, aircraft_id,
     departure_airport, arrival_airport,
@@ -48,7 +48,7 @@ INSERT INTO bookings (
     'AT_RISK',
     'PRIVATE_PILOT',
     90
-);
+) ON CONFLICT (id) DO NOTHING;
 
 -- Rescheduling booking (Instrument Rated)
 INSERT INTO bookings (
@@ -69,7 +69,7 @@ INSERT INTO bookings (
     'RESCHEDULING',
     'INSTRUMENT_RATED',
     180
-);
+) ON CONFLICT (id) DO NOTHING;
 
 -- Completed booking (for historical data)
 INSERT INTO bookings (
@@ -90,7 +90,7 @@ INSERT INTO bookings (
     'COMPLETED',
     'STUDENT_PILOT',
     120
-);
+) ON CONFLICT (id) DO NOTHING;
 
 -- Cancelled booking (for testing)
 INSERT INTO bookings (
@@ -111,5 +111,5 @@ INSERT INTO bookings (
     'CANCELLED',
     'PRIVATE_PILOT',
     90
-);
+) ON CONFLICT (id) DO NOTHING;
 

@@ -37,10 +37,19 @@ export function getUserFriendlyError(error: unknown): UserFriendlyError {
 
     switch (status) {
       case 400:
+        // Show validation errors if available
+        if (data?.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+          return {
+            title: 'Validation Error',
+            message: data.errors.join('. '),
+            actionable: true,
+            retryable: false,
+          };
+        }
         return {
           title: 'Invalid Request',
           message:
-            data?.error || 'The information provided is invalid. Please check and try again.',
+            data?.message || data?.error || 'The information provided is invalid. Please check and try again.',
           actionable: true,
           retryable: false,
         };

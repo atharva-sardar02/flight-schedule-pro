@@ -11,6 +11,7 @@ import {
   AdminAddUserToGroupCommand,
   AdminGetUserCommand,
   GetUserCommand,
+  AdminConfirmSignUpCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { User, UserRole, AuthTokens, LoginRequest, RegisterRequest, CognitoUser } from '../types/user';
 import logger from '../utils/logger';
@@ -100,6 +101,23 @@ export class AuthService {
 
       if (!signUpResponse.UserSub) {
         throw new Error('User registration failed');
+      }
+
+      // Auto-confirm user in development (skip email verification)
+      if (process.env.NODE_ENV === 'development' || process.env.AUTO_CONFIRM_USERS === 'true') {
+        try {
+          const confirmCommand = new AdminConfirmSignUpCommand({
+            UserPoolId: getUserPoolId(),
+            Username: data.email,
+          });
+          await getCognitoClient().send(confirmCommand);
+          logger.info('User auto-confirmed (development mode)', { email: data.email });
+        } catch (confirmError) {
+          logger.warn('Failed to auto-confirm user (may already be confirmed)', {
+            email: data.email,
+            error: confirmError,
+          });
+        }
       }
 
       // Add user to appropriate group based on role

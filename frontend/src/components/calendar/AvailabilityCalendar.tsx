@@ -14,10 +14,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Calendar, List, Clock } from 'lucide-react';
+import BookingService from '../../services/booking';
+import { Booking } from '../../types/booking';
 
 export const AvailabilityCalendar: React.FC = () => {
   const { user } = useAuth();
   const { availability, loading, error, fetchAvailability, clearError } = useAvailability();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
   const [dateRange, setDateRange] = useState({
     startDate: new Date().toISOString().split('T')[0],
     endDate: (() => {
@@ -30,12 +34,55 @@ export const AvailabilityCalendar: React.FC = () => {
   useEffect(() => {
     if (user) {
       loadAvailability();
+      loadBookings();
     }
   }, [user, dateRange]);
 
   const loadAvailability = () => {
     if (user) {
       fetchAvailability(user.id, dateRange.startDate, dateRange.endDate);
+    }
+  };
+
+  const loadBookings = async () => {
+    if (!user) return;
+
+    try {
+      setBookingsLoading(true);
+      let bookingData: Booking[] = [];
+      
+      // Load bookings based on user role
+      if (user.role === 'INSTRUCTOR' || user.role === 'instructor') {
+        // For instructors, show bookings where they are the instructor
+        bookingData = await BookingService.listBookings({
+          instructorId: user.id,
+          startDate: dateRange.startDate,
+          endDate: dateRange.endDate,
+          limit: 1000, // Load all bookings in range
+        });
+      } else if (user.role === 'STUDENT' || user.role === 'student') {
+        // For students, show bookings where they are the student
+        bookingData = await BookingService.listBookings({
+          studentId: user.id,
+          startDate: dateRange.startDate,
+          endDate: dateRange.endDate,
+          limit: 1000, // Load all bookings in range
+        });
+      } else if (user.role === 'ADMIN' || user.role === 'admin') {
+        // For admins, show all bookings in the date range
+        bookingData = await BookingService.listBookings({
+          startDate: dateRange.startDate,
+          endDate: dateRange.endDate,
+          limit: 1000, // Load all bookings in range
+        });
+      }
+      
+      setBookings(bookingData);
+    } catch (err) {
+      console.error('Failed to load bookings for availability calendar:', err);
+      // Don't show error to user - bookings are optional for availability view
+    } finally {
+      setBookingsLoading(false);
     }
   };
 
@@ -148,6 +195,7 @@ export const AvailabilityCalendar: React.FC = () => {
                   slots={availability.slots}
                   startDate={new Date(dateRange.startDate)}
                   endDate={new Date(dateRange.endDate)}
+                  bookings={bookings}
                 />
               ) : (
                 <div className="text-center py-12 text-gray-500">
@@ -196,7 +244,7 @@ export const AvailabilityCalendar: React.FC = () => {
 
         {/* Recurring Availability Tab */}
         <TabsContent value="recurring">
-          <RecurringAvailability />
+          <RecurringAvailability onPatternChange={loadAvailability} />
         </TabsContent>
 
         {/* Availability Overrides Tab */}

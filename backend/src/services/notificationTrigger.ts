@@ -190,6 +190,90 @@ export class NotificationTrigger {
   }
 
   /**
+   * Trigger notification when reschedule options are automatically generated
+   */
+  async triggerRescheduleOptionsAvailable(booking: any, optionsCount: number): Promise<void> {
+    try {
+      const scheduledTime = new Date(booking.scheduled_time);
+      const timeUntilFlight = scheduledTime.getTime() - Date.now();
+      const hoursUntilFlight = Math.round(timeUntilFlight / (1000 * 60 * 60));
+
+      // Calculate deadline (30 minutes before flight or 12 hours after notification, whichever comes first)
+      const deadline30Min = new Date(scheduledTime.getTime() - 30 * 60 * 1000);
+      const deadline12Hours = new Date(Date.now() + 12 * 60 * 60 * 1000);
+      const deadline = deadline30Min < deadline12Hours ? deadline30Min : deadline12Hours;
+      const hoursUntilDeadline = Math.round((deadline.getTime() - Date.now()) / (1000 * 60 * 60));
+
+      // Notify student
+      const studentMessage = `Our AI has automatically generated ${optionsCount} rescheduling options for your flight due to weather conditions.\n\n` +
+        `Flight Time: ${scheduledTime.toLocaleString()}\n` +
+        `Route: ${booking.departure_airport} → ${booking.arrival_airport}\n\n` +
+        `Please rank your preferences by ${deadline.toLocaleString()} (${hoursUntilDeadline} hours remaining).\n\n` +
+        `Visit the rescheduling page to review and rank your options.`;
+
+      await this.createNotification({
+        userId: booking.student_id,
+        bookingId: booking.id,
+        type: 'OPTIONS_AVAILABLE',
+        title: `✈️ Rescheduling Options Available for Your Flight`,
+        message: studentMessage,
+      });
+
+      // Send email to student
+      await this.emailService.sendOptionsAvailable(
+        booking.student_email,
+        booking.student_first_name,
+        {
+          originalTime: scheduledTime,
+          departureAirport: booking.departure_airport,
+          arrivalAirport: booking.arrival_airport,
+          optionsCount,
+          deadline,
+        }
+      );
+
+      // Notify instructor
+      const instructorMessage = `Our AI has automatically generated ${optionsCount} rescheduling options for the flight with ${booking.student_first_name} due to weather conditions.\n\n` +
+        `Flight Time: ${scheduledTime.toLocaleString()}\n` +
+        `Student: ${booking.student_first_name}\n` +
+        `Route: ${booking.departure_airport} → ${booking.arrival_airport}\n\n` +
+        `Please rank your preferences by ${deadline.toLocaleString()} (${hoursUntilDeadline} hours remaining).`;
+
+      await this.createNotification({
+        userId: booking.instructor_id,
+        bookingId: booking.id,
+        type: 'OPTIONS_AVAILABLE',
+        title: `✈️ Rescheduling Options Available for Flight with ${booking.student_first_name}`,
+        message: instructorMessage,
+      });
+
+      // Send email to instructor
+      await this.emailService.sendOptionsAvailable(
+        booking.instructor_email,
+        booking.instructor_first_name,
+        {
+          originalTime: scheduledTime,
+          departureAirport: booking.departure_airport,
+          arrivalAirport: booking.arrival_airport,
+          optionsCount,
+          deadline,
+        }
+      );
+
+      logInfo('Reschedule options available notifications triggered', {
+        bookingId: booking.id,
+        studentId: booking.student_id,
+        instructorId: booking.instructor_id,
+        optionsCount,
+      });
+    } catch (error: any) {
+      logError('Failed to trigger reschedule options available notification', error, {
+        bookingId: booking.id,
+      });
+    }
+  }
+
+  /**
    * Get unread notifications for a user
    */
   async getUnreadNotifications(userId: string): Promise<any[]> {

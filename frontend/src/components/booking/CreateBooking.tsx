@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import BookingService from '../../services/booking';
 import { CreateBookingData } from '../../types/booking';
 import { TrainingLevel } from '../../types/weather';
+import { UserRole } from '../../types/user';
 import { useAuth } from '../../hooks/useAuth';
 import { getUserFriendlyError, showErrorNotification } from '../../utils/errorHandling';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -35,6 +36,32 @@ export default function CreateBooking() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-populate studentId or instructorId based on user role
+  useEffect(() => {
+    if (user && user.id) {
+      console.log('Auto-populating user ID:', user.id, 'Role:', user.role);
+      // Normalize role to uppercase for comparison (API may return lowercase)
+      const normalizedRole = user.role?.toUpperCase();
+      if (normalizedRole === 'STUDENT' || user.role === UserRole.STUDENT) {
+        setFormData((prev) => ({
+          ...prev,
+          studentId: user.id,
+        }));
+        console.log('Set studentId to:', user.id);
+      } else if (normalizedRole === 'INSTRUCTOR' || user.role === UserRole.INSTRUCTOR) {
+        setFormData((prev) => ({
+          ...prev,
+          instructorId: user.id,
+        }));
+        console.log('Set instructorId to:', user.id);
+      } else {
+        console.log('Role not matched:', user.role, 'normalized:', normalizedRole);
+      }
+    } else {
+      console.log('User not available yet:', user);
+    }
+  }, [user]);
 
   // Auto-populate coordinates when airports are selected
   useEffect(() => {
@@ -106,25 +133,60 @@ export default function CreateBooking() {
     try {
       setLoading(true);
 
-      const booking = await BookingService.createBooking({
-        studentId: formData.studentId!,
-        instructorId: formData.instructorId!,
-        aircraftId: formData.aircraftId,
+      // Convert datetime-local to ISO 8601 string
+      const scheduledDate = formData.scheduledDatetime
+        ? new Date(formData.scheduledDatetime).toISOString()
+        : null;
+
+      if (!scheduledDate) {
+        setError('Scheduled date and time is required');
+        return;
+      }
+
+      // Prepare booking data
+      const bookingData: any = {
+        studentId: formData.studentId!.trim(),
+        instructorId: formData.instructorId!.trim(),
         departureAirport: formData.departureAirport!,
         arrivalAirport: formData.arrivalAirport!,
-        departureLatitude: formData.departureLatitude!,
-        departureLongitude: formData.departureLongitude!,
-        arrivalLatitude: formData.arrivalLatitude!,
-        arrivalLongitude: formData.arrivalLongitude!,
-        scheduledDatetime: formData.scheduledDatetime!,
+        departureLatitude: Number(formData.departureLatitude!),
+        departureLongitude: Number(formData.departureLongitude!),
+        arrivalLatitude: Number(formData.arrivalLatitude!),
+        arrivalLongitude: Number(formData.arrivalLongitude!),
+        scheduledDatetime: scheduledDate,
         trainingLevel: formData.trainingLevel || TrainingLevel.STUDENT_PILOT,
-        durationMinutes: formData.durationMinutes || 60,
-      });
+        durationMinutes: Number(formData.durationMinutes || 60),
+      };
+
+      // Only include aircraftId if it's provided and not empty
+      // Don't include it at all if it's empty to avoid validation errors
+      const trimmedAircraftId = formData.aircraftId?.trim();
+      if (trimmedAircraftId && trimmedAircraftId.length > 0) {
+        bookingData.aircraftId = trimmedAircraftId;
+      }
+
+      const booking = await BookingService.createBooking(bookingData);
 
       navigate(`/bookings/${booking.id}`);
-    } catch (err) {
-      const friendlyError = getUserFriendlyError(err);
-      setError(friendlyError.message);
+    } catch (err: any) {
+      // Extract detailed error message
+      let errorMessage = 'Failed to create booking';
+      
+      if (err?.response?.data) {
+        const data = err.response.data;
+        if (data.errors && Array.isArray(data.errors)) {
+          errorMessage = data.errors.join('. ');
+        } else if (data.message) {
+          errorMessage = data.message;
+        } else if (data.error) {
+          errorMessage = data.error;
+        }
+      } else {
+        const friendlyError = getUserFriendlyError(err);
+        errorMessage = friendlyError.message;
+      }
+      
+      setError(errorMessage);
       showErrorNotification(err, 'create-booking');
     } finally {
       setLoading(false);

@@ -11,6 +11,8 @@ import { WeatherValidator } from '../ai/weatherValidator';
 import { ConflictDetector } from '../ai/conflictDetector';
 import { AuditService } from '../../services/auditService';
 import { NotificationTrigger } from '../../services/notificationTrigger';
+import { RescheduleEngine } from '../ai/rescheduleEngine';
+import { RescheduleOptionsService } from '../../services/rescheduleOptionsService';
 import {
   logLambdaStart,
   logLambdaEnd,
@@ -61,6 +63,8 @@ export const handler = async (
     let conflictDetector: ConflictDetector;
     let auditService: AuditService;
     let notificationTrigger: NotificationTrigger;
+    let rescheduleEngine: RescheduleEngine;
+    let rescheduleOptionsService: RescheduleOptionsService;
 
     try {
       weatherService = new WeatherService();
@@ -68,6 +72,8 @@ export const handler = async (
       conflictDetector = new ConflictDetector(dbPool, weatherValidator);
       auditService = new AuditService(dbPool);
       notificationTrigger = new NotificationTrigger(dbPool);
+      rescheduleEngine = new RescheduleEngine(dbPool);
+      rescheduleOptionsService = new RescheduleOptionsService(dbPool);
     } catch (initError: any) {
       logError('Failed to initialize services', initError);
       // Return partial success - system can continue with degraded functionality
@@ -193,11 +199,82 @@ export const handler = async (
             );
           }
 
+          // AUTOMATIC AI RESCHEDULING: Generate options if conditions are critical or persist
+          // Trigger automatic rescheduling if:
+          // 1. Severity is critical (within 2 hours of flight)
+          // 2. Booking has been AT_RISK for more than 1 hour and weather hasn't improved
+          const scheduledTime = new Date(booking.scheduled_time);
+          const timeUntilFlight = scheduledTime.getTime() - Date.now();
+          const hoursUntilFlight = timeUntilFlight / (1000 * 60 * 60);
+          
+          // Check if reschedule options already exist
+          const existingOptions = await rescheduleOptionsService.getOptionsByBooking(conflict.bookingId);
+          const hasExistingOptions = existingOptions.length > 0;
+
+          // Determine if we should auto-generate reschedule options
+          const shouldAutoReschedule = 
+            !hasExistingOptions && // Don't regenerate if options already exist
+            (
+              conflict.severity === 'critical' || // Critical: within 2 hours
+              (previousStatus === 'AT_RISK' && hoursUntilFlight <= 12) // Been AT_RISK and flight is within 12 hours
+            );
+
+          if (shouldAutoReschedule) {
+            try {
+              logInfo('Auto-triggering AI rescheduling for weather conflict', {
+                bookingId: conflict.bookingId,
+                severity: conflict.severity,
+                hoursUntilFlight: hoursUntilFlight.toFixed(2),
+              });
+
+              // Generate reschedule options using AI
+              const options = await rescheduleEngine.generateRescheduleOptions(conflict.bookingId);
+
+              if (options.length > 0) {
+                // Update booking status to RESCHEDULING
+                await dbPool.query(
+                  `UPDATE bookings 
+                   SET status = 'RESCHEDULING',
+                       updated_at = NOW()
+                   WHERE id = $1`,
+                  [conflict.bookingId]
+                );
+
+                // Log status change
+                await auditService.logStatusChange(
+                  conflict.bookingId,
+                  'AT_RISK',
+                  'RESCHEDULING',
+                  'AI reschedule options automatically generated',
+                  'system'
+                );
+
+                // Send notifications that reschedule options are available
+                await notificationTrigger.triggerRescheduleOptionsAvailable(booking, options.length);
+
+                logInfo('Automatic AI rescheduling completed', {
+                  bookingId: conflict.bookingId,
+                  optionsGenerated: options.length,
+                });
+              } else {
+                logWarn('AI rescheduling generated no options', {
+                  bookingId: conflict.bookingId,
+                });
+              }
+            } catch (rescheduleError: any) {
+              logError('Failed to auto-generate reschedule options', rescheduleError, {
+                bookingId: conflict.bookingId,
+              });
+              // Continue processing - rescheduling failure is non-critical
+            }
+          }
+
           logInfo('Conflict processed', {
             bookingId: conflict.bookingId,
             conflictType: conflict.conflictType,
             severity: conflict.severity,
             notificationsSent: conflict.shouldNotify ? 2 : 0,
+            autoRescheduleTriggered: shouldAutoReschedule,
           });
         } else {
           // Check if weather has cleared (was AT_RISK, now valid)
