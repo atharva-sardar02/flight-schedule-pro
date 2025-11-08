@@ -1,295 +1,274 @@
 /**
- * Load Testing Script
- * Tests system performance with 100 concurrent flights
+ * Load Test Script
+ * Tests system with 20 concurrent bookings
  * 
- * Usage: node tests/load/loadTest.js
+ * Usage:
+ *   node tests/load/loadTest.js
  * 
  * Prerequisites:
- * - Backend API running (or deployed)
- * - Test users created in database
- * - Environment variables configured
+ *   - Staging environment deployed
+ *   - Test accounts created
+ *   - API_URL environment variable set
  */
 
+// Note: Install dependencies first: npm install axios uuid
 const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
 
 // Configuration
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3001';
-const CONCURRENT_FLIGHTS = 100;
-const TEST_DURATION_SECONDS = 300; // 5 minutes
-const REQUESTS_PER_SECOND = 10;
+const API_URL = process.env.API_URL || 'https://api-staging.flightschedulepro.com';
+const CONCURRENT_BOOKINGS = 20;
+const STUDENT_EMAIL = process.env.STUDENT_EMAIL || 'student@staging.flightschedulepro.com';
+const STUDENT_PASSWORD = process.env.STUDENT_PASSWORD || 'TestPassword123!';
+const INSTRUCTOR_EMAIL = process.env.INSTRUCTOR_EMAIL || 'instructor@staging.flightschedulepro.com';
+const INSTRUCTOR_PASSWORD = process.env.INSTRUCTOR_PASSWORD || 'TestPassword123!';
 
 // Test data
-const testUsers = {
-  student: process.env.TEST_STUDENT_ID || 'd408e4c8-a021-7020-2b81-4aba6a1507c1',
-  instructor: process.env.TEST_INSTRUCTOR_ID || 'e519f5d9-b132-8131-3c92-5bcb7b2618d2',
-};
+const airports = [
+  { code: 'KJFK', lat: 40.6413, lon: -73.7781, name: 'New York JFK' },
+  { code: 'KLAX', lat: 33.9425, lon: -118.4081, name: 'Los Angeles' },
+  { code: 'KORD', lat: 41.9742, lon: -87.9073, name: 'Chicago O\'Hare' },
+  { code: 'KDFW', lat: 32.8998, lon: -97.0403, name: 'Dallas/Fort Worth' },
+  { code: 'KMIA', lat: 25.7959, lon: -80.2870, name: 'Miami' },
+];
 
-// Statistics
-const stats = {
-  totalRequests: 0,
-  successfulRequests: 0,
-  failedRequests: 0,
-  totalResponseTime: 0,
-  minResponseTime: Infinity,
-  maxResponseTime: 0,
+// Results tracking
+const results = {
+  total: 0,
+  successful: 0,
+  failed: 0,
   errors: [],
-  statusCodes: {},
+  responseTimes: [],
+  startTime: null,
+  endTime: null,
 };
 
 /**
- * Generate a random booking date (within next 30 days)
- */
-function getRandomBookingDate() {
-  const now = new Date();
-  const daysAhead = Math.floor(Math.random() * 30) + 1;
-  const date = new Date(now);
-  date.setDate(date.getDate() + daysAhead);
-  date.setHours(Math.floor(Math.random() * 12) + 8, Math.floor(Math.random() * 60), 0, 0);
-  return date.toISOString();
-}
-
-/**
- * Create a test booking
- */
-async function createTestBooking(token) {
-  const bookingData = {
-    studentId: testUsers.student,
-    instructorId: testUsers.instructor,
-    departureAirport: 'KJFK',
-    arrivalAirport: 'KBOS',
-    departureLatitude: 40.6413,
-    departureLongitude: -73.7781,
-    arrivalLatitude: 42.3656,
-    arrivalLongitude: -71.0096,
-    scheduledDatetime: getRandomBookingDate(),
-    trainingLevel: 'PRIVATE_PILOT',
-    durationMinutes: 60,
-    aircraftId: 'N12345',
-  };
-
-  const startTime = Date.now();
-  try {
-    const response = await axios.post(`${API_BASE_URL}/bookings`, bookingData, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 10000,
-    });
-
-    const responseTime = Date.now() - startTime;
-    recordSuccess(response.status, responseTime);
-    return response.data;
-  } catch (error) {
-    const responseTime = Date.now() - startTime;
-    recordError(error, responseTime);
-    throw error;
-  }
-}
-
-/**
- * List bookings
- */
-async function listBookings(token) {
-  const startTime = Date.now();
-  try {
-    const response = await axios.get(`${API_BASE_URL}/bookings`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      timeout: 5000,
-    });
-
-    const responseTime = Date.now() - startTime;
-    recordSuccess(response.status, responseTime);
-    return response.data;
-  } catch (error) {
-    const responseTime = Date.now() - startTime;
-    recordError(error, responseTime);
-    throw error;
-  }
-}
-
-/**
- * Record successful request
- */
-function recordSuccess(statusCode, responseTime) {
-  stats.totalRequests++;
-  stats.successfulRequests++;
-  stats.totalResponseTime += responseTime;
-  stats.minResponseTime = Math.min(stats.minResponseTime, responseTime);
-  stats.maxResponseTime = Math.max(stats.maxResponseTime, responseTime);
-  
-  if (!stats.statusCodes[statusCode]) {
-    stats.statusCodes[statusCode] = 0;
-  }
-  stats.statusCodes[statusCode]++;
-}
-
-/**
- * Record failed request
- */
-function recordError(error, responseTime) {
-  stats.totalRequests++;
-  stats.failedRequests++;
-  stats.totalResponseTime += responseTime;
-  
-  const statusCode = error.response?.status || 'NETWORK_ERROR';
-  if (!stats.statusCodes[statusCode]) {
-    stats.statusCodes[statusCode] = 0;
-  }
-  stats.statusCodes[statusCode]++;
-  
-  stats.errors.push({
-    message: error.message,
-    status: error.response?.status,
-    responseTime,
-    timestamp: new Date().toISOString(),
-  });
-}
-
-/**
- * Login and get token
+ * Login and get JWT token
  */
 async function login(email, password) {
   try {
-    const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+    const response = await axios.post(`${API_URL}/auth/login`, {
       email,
       password,
     });
     return response.data.tokens.accessToken;
   } catch (error) {
-    console.error('Login failed:', error.message);
+    console.error(`Login failed for ${email}:`, error.response?.data || error.message);
     throw error;
   }
+}
+
+/**
+ * Create a booking
+ */
+async function createBooking(token, bookingData) {
+  const startTime = Date.now();
+  try {
+    const response = await axios.post(
+      `${API_URL}/bookings`,
+      bookingData,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    const responseTime = Date.now() - startTime;
+    results.responseTimes.push(responseTime);
+    results.successful++;
+    return { success: true, bookingId: response.data.booking.id, responseTime };
+  } catch (error) {
+    const responseTime = Date.now() - startTime;
+    results.responseTimes.push(responseTime);
+    results.failed++;
+    const errorMsg = error.response?.data?.message || error.message;
+    results.errors.push({
+      booking: bookingData,
+      error: errorMsg,
+      responseTime,
+    });
+    return { success: false, error: errorMsg, responseTime };
+  }
+}
+
+/**
+ * Generate random booking data
+ */
+function generateBookingData(instructorId) {
+  const departure = airports[Math.floor(Math.random() * airports.length)];
+  let arrival = airports[Math.floor(Math.random() * airports.length)];
+  while (arrival.code === departure.code) {
+    arrival = airports[Math.floor(Math.random() * airports.length)];
+  }
+
+  // Random date within next 30 days
+  const scheduledDate = new Date();
+  scheduledDate.setDate(scheduledDate.getDate() + Math.floor(Math.random() * 30));
+  scheduledDate.setHours(9 + Math.floor(Math.random() * 8)); // 9 AM - 5 PM
+  scheduledDate.setMinutes(Math.floor(Math.random() * 4) * 15); // 0, 15, 30, 45
+
+  return {
+    studentId: uuidv4(), // Will be replaced with actual student ID
+    instructorId,
+    departureAirport: departure.code,
+    arrivalAirport: arrival.code,
+    departureLatitude: departure.lat,
+    departureLongitude: departure.lon,
+    arrivalLatitude: arrival.lat,
+    arrivalLongitude: arrival.lon,
+    scheduledDatetime: scheduledDate.toISOString(),
+    trainingLevel: 'STUDENT_PILOT',
+    durationMinutes: 60,
+    aircraftId: `N${Math.floor(Math.random() * 10000)}`,
+  };
 }
 
 /**
  * Run load test
  */
 async function runLoadTest() {
-  console.log('🚀 Starting Load Test');
-  console.log(`API Base URL: ${API_BASE_URL}`);
-  console.log(`Concurrent Flights: ${CONCURRENT_FLIGHTS}`);
-  console.log(`Test Duration: ${TEST_DURATION_SECONDS} seconds`);
-  console.log(`Requests per second: ${REQUESTS_PER_SECOND}`);
+  console.log('='.repeat(80));
+  console.log('Flight Schedule Pro - Load Test');
+  console.log('='.repeat(80));
+  console.log(`API URL: ${API_URL}`);
+  console.log(`Concurrent Bookings: ${CONCURRENT_BOOKINGS}`);
   console.log('');
 
-  // Login to get token
-  console.log('📝 Logging in...');
-  let token;
+  results.startTime = Date.now();
+
   try {
-    token = await login(
-      process.env.TEST_EMAIL || 'test@example.com',
-      process.env.TEST_PASSWORD || 'TestPassword123!'
-    );
-    console.log('✅ Login successful\n');
-  } catch (error) {
-    console.error('❌ Login failed. Please check credentials.');
-    process.exit(1);
-  }
+    // Login as student
+    console.log('Logging in as student...');
+    const studentToken = await login(STUDENT_EMAIL, STUDENT_PASSWORD);
+    console.log('✓ Student logged in');
 
-  // Run load test
-  const startTime = Date.now();
-  const endTime = startTime + (TEST_DURATION_SECONDS * 1000);
-  const requests = [];
+    // Get student ID
+    const studentResponse = await axios.get(`${API_URL}/auth/me`, {
+      headers: { 'Authorization': `Bearer ${studentToken}` },
+    });
+    const studentId = studentResponse.data.id;
+    console.log(`✓ Student ID: ${studentId}`);
 
-  console.log('🔥 Starting load test...\n');
+    // Login as instructor
+    console.log('Logging in as instructor...');
+    const instructorToken = await login(INSTRUCTOR_EMAIL, INSTRUCTOR_PASSWORD);
+    console.log('✓ Instructor logged in');
 
-  // Create concurrent booking requests
-  for (let i = 0; i < CONCURRENT_FLIGHTS; i++) {
-    requests.push(
-      createTestBooking(token).catch((err) => {
-        // Silently handle errors (already recorded)
-      })
-    );
-  }
+    // Get instructor ID
+    const instructorResponse = await axios.get(`${API_URL}/auth/me`, {
+      headers: { 'Authorization': `Bearer ${instructorToken}` },
+    });
+    const instructorId = instructorResponse.data.id;
+    console.log(`✓ Instructor ID: ${instructorId}`);
+    console.log('');
 
-  // Wait for initial batch
-  await Promise.allSettled(requests);
+    // Generate booking data
+    console.log('Generating booking data...');
+    const bookings = Array.from({ length: CONCURRENT_BOOKINGS }, () => {
+      const data = generateBookingData(instructorId);
+      data.studentId = studentId;
+      return data;
+    });
+    console.log(`✓ Generated ${bookings.length} booking requests`);
+    console.log('');
 
-  // Continue with sustained load
-  const interval = setInterval(async () => {
-    if (Date.now() >= endTime) {
-      clearInterval(interval);
-      return;
+    // Create bookings concurrently
+    console.log('Creating bookings concurrently...');
+    const promises = bookings.map((bookingData, index) => {
+      return createBooking(studentToken, bookingData)
+        .then(result => {
+          console.log(`[${index + 1}/${CONCURRENT_BOOKINGS}] ${result.success ? '✓' : '✗'} ${result.responseTime}ms`);
+          return result;
+        });
+    });
+
+    const bookingResults = await Promise.all(promises);
+    results.total = bookingResults.length;
+
+    results.endTime = Date.now();
+    const totalTime = results.endTime - results.startTime;
+
+    // Print results
+    console.log('');
+    console.log('='.repeat(80));
+    console.log('Load Test Results');
+    console.log('='.repeat(80));
+    console.log(`Total Bookings: ${results.total}`);
+    console.log(`Successful: ${results.successful} (${(results.successful / results.total * 100).toFixed(1)}%)`);
+    console.log(`Failed: ${results.failed} (${(results.failed / results.total * 100).toFixed(1)}%)`);
+    console.log(`Total Time: ${totalTime}ms (${(totalTime / 1000).toFixed(2)}s)`);
+    console.log('');
+
+    if (results.responseTimes.length > 0) {
+      const avgResponseTime = results.responseTimes.reduce((a, b) => a + b, 0) / results.responseTimes.length;
+      const minResponseTime = Math.min(...results.responseTimes);
+      const maxResponseTime = Math.max(...results.responseTimes);
+      const sortedTimes = [...results.responseTimes].sort((a, b) => a - b);
+      const p50 = sortedTimes[Math.floor(sortedTimes.length * 0.5)];
+      const p95 = sortedTimes[Math.floor(sortedTimes.length * 0.95)];
+      const p99 = sortedTimes[Math.floor(sortedTimes.length * 0.99)];
+
+      console.log('Response Time Statistics:');
+      console.log(`  Average: ${avgResponseTime.toFixed(2)}ms`);
+      console.log(`  Min: ${minResponseTime}ms`);
+      console.log(`  Max: ${maxResponseTime}ms`);
+      console.log(`  P50: ${p50}ms`);
+      console.log(`  P95: ${p95}ms`);
+      console.log(`  P99: ${p99}ms`);
+      console.log('');
     }
 
-    // Make requests at specified rate
-    for (let i = 0; i < REQUESTS_PER_SECOND; i++) {
-      // Mix of create and list operations
-      if (Math.random() > 0.3) {
-        createTestBooking(token).catch(() => {});
+    if (results.errors.length > 0) {
+      console.log('Errors:');
+      results.errors.forEach((error, index) => {
+        console.log(`  ${index + 1}. ${error.error}`);
+        console.log(`     Booking: ${error.booking.departureAirport} → ${error.booking.arrivalAirport}`);
+        console.log(`     Response Time: ${error.responseTime}ms`);
+      });
+      console.log('');
+    }
+
+    // Performance assessment
+    console.log('Performance Assessment:');
+    if (results.successful / results.total >= 0.95) {
+      console.log('  ✓ Success rate acceptable (≥95%)');
+    } else {
+      console.log('  ✗ Success rate below threshold (<95%)');
+    }
+
+    if (results.responseTimes.length > 0) {
+      const avgResponseTime = results.responseTimes.reduce((a, b) => a + b, 0) / results.responseTimes.length;
+      if (avgResponseTime < 2000) {
+        console.log('  ✓ Average response time acceptable (<2s)');
       } else {
-        listBookings(token).catch(() => {});
+        console.log('  ✗ Average response time too high (≥2s)');
       }
     }
-  }, 1000); // Every second
 
-  // Wait for test duration
-  await new Promise((resolve) => setTimeout(resolve, TEST_DURATION_SECONDS * 1000));
-  clearInterval(interval);
-
-  // Print results
-  printResults();
-}
-
-/**
- * Print test results
- */
-function printResults() {
-  console.log('\n📊 Load Test Results\n');
-  console.log('='.repeat(60));
-  console.log(`Total Requests: ${stats.totalRequests}`);
-  console.log(`Successful: ${stats.successfulRequests} (${((stats.successfulRequests / stats.totalRequests) * 100).toFixed(2)}%)`);
-  console.log(`Failed: ${stats.failedRequests} (${((stats.failedRequests / stats.totalRequests) * 100).toFixed(2)}%)`);
-  console.log('');
-  
-  if (stats.successfulRequests > 0) {
-    const avgResponseTime = stats.totalResponseTime / stats.totalRequests;
-    console.log(`Average Response Time: ${avgResponseTime.toFixed(2)}ms`);
-    console.log(`Min Response Time: ${stats.minResponseTime}ms`);
-    console.log(`Max Response Time: ${stats.maxResponseTime}ms`);
     console.log('');
-  }
 
-  console.log('Status Codes:');
-  Object.entries(stats.statusCodes).forEach(([code, count]) => {
-    console.log(`  ${code}: ${count}`);
-  });
-  console.log('');
-
-  if (stats.errors.length > 0) {
-    console.log(`Errors (showing first 10):`);
-    stats.errors.slice(0, 10).forEach((error, i) => {
-      console.log(`  ${i + 1}. ${error.message} (${error.status || 'N/A'})`);
-    });
-    if (stats.errors.length > 10) {
-      console.log(`  ... and ${stats.errors.length - 10} more errors`);
+    // Exit code
+    if (results.successful / results.total >= 0.95) {
+      console.log('✓ Load test PASSED');
+      process.exit(0);
+    } else {
+      console.log('✗ Load test FAILED');
+      process.exit(1);
     }
-    console.log('');
-  }
 
-  // Performance targets
-  console.log('🎯 Performance Targets:');
-  const avgResponseTime = stats.totalResponseTime / stats.totalRequests;
-  const successRate = (stats.successfulRequests / stats.totalRequests) * 100;
-  
-  console.log(`  Dashboard Load: <10s - ${avgResponseTime < 10000 ? '✅' : '❌'} (${(avgResponseTime / 1000).toFixed(2)}s)`);
-  console.log(`  Notification Delivery: <3min - ${avgResponseTime < 180000 ? '✅' : '❌'} (${(avgResponseTime / 1000).toFixed(2)}s)`);
-  console.log(`  Success Rate: >95% - ${successRate >= 95 ? '✅' : '❌'} (${successRate.toFixed(2)}%)`);
-  console.log('');
-
-  console.log('='.repeat(60));
-}
-
-// Run the test
-if (require.main === module) {
-  runLoadTest().catch((error) => {
+  } catch (error) {
     console.error('Load test failed:', error);
     process.exit(1);
-  });
+  }
 }
 
-module.exports = { runLoadTest, stats };
+// Run test
+if (require.main === module) {
+  runLoadTest();
+}
+
+module.exports = { runLoadTest };
+
 

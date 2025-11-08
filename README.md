@@ -157,17 +157,19 @@ See `.env.template` for complete list of variables.
 
 ### 5. Run Development Servers
 
-**Backend (Lambda functions):**
+**Backend (Express dev server):**
 ```bash
 cd backend
-npm run dev  # Uses SAM CLI or Serverless Framework for local testing
+npm run dev  # Starts Express server on http://localhost:3001
 ```
 
 **Frontend:**
 ```bash
 cd frontend
-npm run start  # Starts React dev server on http://localhost:3000
+npm run dev  # Starts Vite dev server on http://localhost:3000
 ```
+
+**Note:** For detailed local development setup, see `docs/LOCAL_DEVELOPMENT_GUIDE.md`
 
 ## 📁 Project Structure
 
@@ -322,12 +324,28 @@ Closes #123
 
 ## 📚 Documentation
 
+### Core Documentation
 - **PRD:** `prd_final_v2.md` - Complete Product Requirements Document
 - **Task List:** `project_tasklist.md` - 25-PR implementation roadmap
 - **Memory Bank:** `memory-bank/` - Project intelligence and context
-- **API:** `docs/API.md` - API documentation (when created)
-- **Architecture:** `docs/ARCHITECTURE.md` - System architecture (when created)
-- **Deployment:** `docs/DEPLOYMENT.md` - Deployment guide (when created)
+
+### Technical Documentation
+- **API:** `docs/API.md` - Complete API reference with all endpoints
+- **Architecture:** `docs/ARCHITECTURE.md` - System architecture and design patterns
+- **Deployment:** `docs/DEPLOYMENT.md` - Step-by-step deployment guide
+- **Database Schema:** `docs/DATABASE_SCHEMA.md` - Database schema documentation
+- **Troubleshooting:** `docs/TROUBLESHOOTING.md` - Common issues and solutions
+- **Operations:** `docs/OPERATIONS.md` - Operations runbook and procedures
+
+### User Documentation
+- **User Guide:** `docs/USER_GUIDE.md` - Availability calendar user guide
+- **Demo Script:** `docs/DEMO_SCRIPT.md` - Demo video script
+
+### Additional Guides
+- **Local Development:** `docs/LOCAL_DEVELOPMENT_GUIDE.md` - Local setup guide
+- **Database Setup (Windows):** `docs/DATABASE_SETUP_WINDOWS.md` - Windows-specific setup
+- **Security:** `docs/SECURITY.md` - Security documentation
+- **Analytics:** `docs/ANALYTICS.md` - Monitoring and analytics guide
 
 ## 🎯 Success Metrics
 

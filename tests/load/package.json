@@ -1,0 +1,14 @@
+{
+  "name": "flight-schedule-pro-load-test",
+  "version": "1.0.0",
+  "description": "Load test script for Flight Schedule Pro",
+  "main": "loadTest.js",
+  "scripts": {
+    "test": "node loadTest.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "uuid": "^11.0.3"
+  }
+}
+
