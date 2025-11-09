@@ -42,16 +42,34 @@ async function runMigration(filename) {
   console.log(`\n📄 Running ${filename}...`);
   
   try {
-    await pool.query(sql);
-    console.log(`✅ ${filename} completed`);
-  } catch (error) {
-    // Ignore "already exists" errors
-    if (error.message.includes('already exists') || error.code === '42P07') {
-      console.log(`⚠️  ${filename} - tables/indexes already exist (skipping)`);
-    } else {
-      console.error(`❌ ${filename} failed:`, error.message);
-      throw error;
+    // Split SQL into individual statements for better error handling
+    const statements = sql.split(';').filter(s => s.trim().length > 0);
+    
+    for (const statement of statements) {
+      try {
+        await pool.query(statement);
+      } catch (stmtError: any) {
+        // Ignore "already exists" errors
+        if (stmtError.message.includes('already exists') || stmtError.code === '42P07') {
+          // Skip
+        } 
+        // Ignore "does not exist" errors for ANALYZE statements (tables might not exist yet)
+        else if (stmtError.message.includes('does not exist') && statement.trim().toUpperCase().startsWith('ANALYZE')) {
+          console.log(`   ⚠️  Skipping ANALYZE for non-existent table`);
+        }
+        // Ignore index creation errors if table doesn't exist (will be created later)
+        else if (stmtError.message.includes('does not exist') && statement.trim().toUpperCase().includes('CREATE INDEX')) {
+          console.log(`   ⚠️  Skipping index creation (table not created yet)`);
+        }
+        else {
+          throw stmtError;
+        }
+      }
     }
+    console.log(`✅ ${filename} completed`);
+  } catch (error: any) {
+    console.error(`❌ ${filename} failed:`, error.message);
+    throw error;
   }
 }
 
