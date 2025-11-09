@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
+    "start": "node dist/dev-server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/dev-server.ts",
     "dev:build": "npm run build && npm run watch",
     "test": "jest",
@@ -27,6 +28,7 @@
     "@langchain/openai": "^1.0.0",
     "axios": "^1.7.7",
     "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^17.2.3",
@@ -39,6 +41,7 @@
   "devDependencies": {
     "@types/aws-lambda": "^8.10.145",
     "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.10",
