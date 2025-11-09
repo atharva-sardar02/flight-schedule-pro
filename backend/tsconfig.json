@@ -6,7 +6,7 @@
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./src",
-    "moduleResolution": "node16",
+    "moduleResolution": "node",
     "baseUrl": "./src",
     "paths": {
       "@functions/*": ["functions/*"],
