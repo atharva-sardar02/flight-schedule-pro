@@ -14,6 +14,7 @@ import { getDbPool } from './utils/db';
 import { InAppNotifier } from './functions/notifications/inAppNotifier';
 import { requireAuth } from './middleware/auth';
 import { Request, Response, NextFunction } from 'express';
+import { APIGatewayProxyResult } from 'aws-lambda';
 
 // Express middleware wrapper for requireAuth
 async function requireAuthExpress(req: Request, res: Response, next: NextFunction) {
@@ -37,13 +38,15 @@ async function requireAuthExpress(req: Request, res: Response, next: NextFunctio
     const authResult = await requireAuth(event as any);
     
     if (!authResult.authorized) {
-      res.status(authResult.response.statusCode);
-      if (authResult.response.headers) {
-        Object.entries(authResult.response.headers).forEach(([key, value]) => {
+      // TypeScript type narrowing: when authorized is false, response exists
+      const unauthorizedResult = authResult as { authorized: false; response: APIGatewayProxyResult };
+      res.status(unauthorizedResult.response.statusCode);
+      if (unauthorizedResult.response.headers) {
+        Object.entries(unauthorizedResult.response.headers).forEach(([key, value]) => {
           res.setHeader(key, value as string);
         });
       }
-      return res.send(authResult.response.body);
+      return res.send(unauthorizedResult.response.body);
     }
 
     // Attach user to request object

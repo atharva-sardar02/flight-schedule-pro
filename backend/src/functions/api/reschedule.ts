@@ -60,7 +60,8 @@ export const rescheduleHandler = async (
     const authResult = await requireAuth(event);
     
     if (!authResult.authorized) {
-      return authResult.response;
+      // TypeScript type narrowing: when authorized is false, response exists
+      return (authResult as { authorized: false; response: APIGatewayProxyResult }).response;
     }
     
     const user = authResult.user;
