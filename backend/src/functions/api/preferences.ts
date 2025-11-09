@@ -26,15 +26,19 @@ let pool: Pool;
 
 function getPool(): Pool {
   if (!pool) {
+    // Use the same environment variable names as the main db.ts
     pool = new Pool({
-      host: process.env.DB_HOST,
-      port: parseInt(process.env.DB_PORT || '5432'),
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
+      host: process.env.DATABASE_HOST || process.env.DB_HOST,
+      port: parseInt(process.env.DATABASE_PORT || process.env.DB_PORT || '5432'),
+      database: process.env.DATABASE_NAME || process.env.DB_NAME,
+      user: process.env.DATABASE_USER || process.env.DB_USER,
+      password: process.env.DATABASE_PASSWORD || process.env.DB_PASSWORD,
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,
+      ssl: process.env.NODE_ENV === 'production' 
+        ? { rejectUnauthorized: false } // Allow self-signed certificates for RDS
+        : undefined,
     });
   }
   return pool;
