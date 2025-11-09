@@ -70,3 +70,4 @@ Write-Host "2. Check each function's Environment variables" -ForegroundColor Whi
 Write-Host "3. All should have 12 variables set`n" -ForegroundColor White
 
 
+

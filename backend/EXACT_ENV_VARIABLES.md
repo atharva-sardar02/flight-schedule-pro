@@ -143,3 +143,4 @@ aws cognito-idp list-user-pool-clients --user-pool-id YOUR_POOL_ID --region us-e
 **Once you have Cognito values, add them to all 3 Lambda functions!**
 
 
+

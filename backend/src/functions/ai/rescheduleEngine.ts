@@ -7,7 +7,9 @@
 import { Pool } from 'pg';
 import { StateGraph, END, START } from '@langchain/langgraph';
 import { ChatOpenAI } from '@langchain/openai';
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+// Import messages - using require to avoid TypeScript module resolution issues
+// @ts-ignore - module resolution issue with @langchain/core/messages
+const { HumanMessage, SystemMessage } = require('@langchain/core/messages');
 import { addDays, addHours, isWithinInterval, parse, format } from 'date-fns';
 import { WeatherValidator } from './weatherValidator';
 import { WeatherService } from '../../services/weatherService';
@@ -483,9 +485,10 @@ Please select the top 3 best options for rescheduling, considering proximity to 
         llmResponse = response.content || response.text || '';
         logInfo('LLM response received', { bookingId: state.bookingId, responseLength: llmResponse.length });
       } catch (llmError: any) {
-        logWarn('LLM call failed, falling back to rule-based ranking', llmError, {
+        logWarn('LLM call failed, falling back to rule-based ranking', {
           bookingId: state.bookingId,
           error: llmError.message,
+          errorStack: llmError.stack,
         });
         // Fall back to rule-based ranking
         return this.rankAndSelectTop3RuleBased(state);
@@ -520,8 +523,9 @@ Please select the top 3 best options for rescheduling, considering proximity to 
           })),
         });
       } catch (parseError: any) {
-        logWarn('Failed to parse LLM response, falling back to rule-based', parseError, {
+        logWarn('Failed to parse LLM response, falling back to rule-based', {
           bookingId: state.bookingId,
+          error: parseError.message,
           response: llmResponse.substring(0, 200),
         });
         // Fall back to rule-based ranking

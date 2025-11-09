@@ -27,3 +27,4 @@ Get-Item lambda-package.zip | Select-Object Name, @{Name="Size(MB)";Expression={
 Remove-Item -Recurse -Force lambda-package
 
 
+

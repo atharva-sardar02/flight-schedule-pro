@@ -74,3 +74,4 @@ aws logs tail /aws/lambda/flight-schedule-pro-staging-api --since 10m --region u
 **Fix immediately:** Update timeout to 30 seconds!
 
 
+

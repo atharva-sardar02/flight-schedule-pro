@@ -65,16 +65,11 @@ export function Dashboard() {
         return;
       }
 
-      // Calculate date range for this month
       const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
       
-      // Build filters based on user role
+      // Build filters based on user role (no date restrictions)
       const filters: any = {
-        startDate: startOfMonth.toISOString().split('T')[0],
-        endDate: endOfMonth.toISOString().split('T')[0],
-        limit: 100, // Get all bookings for the month
+        limit: 1000, // Get all bookings
       };
 
       if (user.role === UserRole.STUDENT) {
@@ -84,48 +79,39 @@ export function Dashboard() {
       }
       // Admins see all bookings (no filter)
 
-      // Fetch bookings
+      // Fetch all bookings (no date restriction)
       const bookings = await BookingService.listBookings(filters);
+
+      // For successful reschedules, fetch ALL rescheduled bookings (not just current month)
+      // This ensures we count all reschedules regardless of when they were rescheduled
+      const rescheduleFilters: any = {
+        limit: 1000, // Get all reschedules
+      };
+      if (user.role === UserRole.STUDENT) {
+        rescheduleFilters.studentId = user.id;
+      } else if (user.role === UserRole.INSTRUCTOR) {
+        rescheduleFilters.instructorId = user.id;
+      }
+      rescheduleFilters.status = BookingStatus.RESCHEDULED;
+      const allRescheduledBookings = await BookingService.listBookings(rescheduleFilters);
 
       // Calculate metrics
       const totalFlights = bookings.length;
       const activeAlerts = bookings.filter(b => b.status === BookingStatus.AT_RISK).length;
-      const successfulReschedules = bookings.filter(b => b.status === BookingStatus.RESCHEDULED).length;
+      const successfulReschedules = allRescheduledBookings.length; // Count all reschedules, not just current month
       const confirmedFlights = bookings.filter(b => b.status === BookingStatus.CONFIRMED).length;
       
-      // Get previous month for comparison (simplified - just show current month data)
-      const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-      
-      const prevFilters = {
-        ...filters,
-        startDate: previousMonthStart.toISOString().split('T')[0],
-        endDate: previousMonthEnd.toISOString().split('T')[0],
-      };
-      
-      let previousBookings: Booking[] = [];
-      try {
-        previousBookings = await BookingService.listBookings(prevFilters);
-      } catch (err) {
-        console.warn('Could not fetch previous month data:', err);
-      }
+      // No date restrictions - show all-time data
+      // For comparison, we'll use the same data (no previous month comparison)
+      const prevTotalFlights = bookings.length;
+      const prevActiveAlerts = bookings.filter(b => b.status === BookingStatus.AT_RISK).length;
+      const prevReschedules = allRescheduledBookings.length;
 
-      const prevTotalFlights = previousBookings.length;
-      const prevActiveAlerts = previousBookings.filter(b => b.status === BookingStatus.AT_RISK).length;
-      const prevReschedules = previousBookings.filter(b => b.status === BookingStatus.RESCHEDULED).length;
-
-      // Calculate changes
-      const totalFlightsChange = prevTotalFlights > 0 
-        ? Math.round(((totalFlights - prevTotalFlights) / prevTotalFlights) * 100)
-        : totalFlights > 0 ? 100 : 0;
-      
-      const alertsChange = prevActiveAlerts > 0
-        ? Math.round(((activeAlerts - prevActiveAlerts) / prevActiveAlerts) * 100)
-        : activeAlerts > 0 ? 100 : 0;
-
-      const reschedulesChange = prevReschedules > 0
-        ? Math.round(((successfulReschedules - prevReschedules) / prevReschedules) * 100)
-        : successfulReschedules > 0 ? 100 : 0;
+      // No date restrictions - show all-time data
+      // Change indicators are neutral since we're showing all-time data (not month-over-month)
+      const totalFlightsChange = 0;
+      const alertsChange = 0;
+      const reschedulesChange = 0;
 
       // Get upcoming bookings (next 7 days) for flight status
       const nextWeek = new Date();
@@ -178,17 +164,17 @@ export function Dashboard() {
             label: 'Total Flights',
             value: totalFlights,
             change: { 
-              value: Math.abs(totalFlightsChange), 
-              trend: totalFlightsChange >= 0 ? 'up' : 'down' 
+              value: 0, 
+              trend: 'neutral' as const 
             },
-            description: 'Scheduled this month',
+            description: 'All bookings',
           },
           {
             label: 'Active Alerts',
             value: activeAlerts,
             change: { 
-              value: Math.abs(alertsChange), 
-              trend: alertsChange <= 0 ? 'down' : 'up' 
+              value: 0, 
+              trend: 'neutral' as const 
             },
             description: 'Weather conflicts detected',
           },
@@ -196,10 +182,10 @@ export function Dashboard() {
             label: 'Successful Reschedules',
             value: successfulReschedules,
             change: { 
-              value: Math.abs(reschedulesChange), 
-              trend: reschedulesChange >= 0 ? 'up' : 'down' 
+              value: 0, 
+              trend: 'neutral' as const 
             },
-            description: 'Completed this month',
+            description: 'All-time reschedules',
           },
           {
             label: 'Confirmed Flights',
@@ -208,7 +194,7 @@ export function Dashboard() {
               value: 0, 
               trend: 'neutral' as const 
             },
-            description: 'Ready to fly',
+            description: 'All confirmed bookings',
           },
         ],
         weatherAlerts,
