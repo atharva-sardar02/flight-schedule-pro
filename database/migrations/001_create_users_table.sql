@@ -12,11 +12,12 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
-    cognito_user_id VARCHAR(255) UNIQUE NOT NULL,
+    cognito_user_id VARCHAR(255) UNIQUE, -- Optional for mock auth
     role VARCHAR(20) NOT NULL CHECK (role IN ('STUDENT', 'INSTRUCTOR', 'ADMIN')),
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
-    phone VARCHAR(20),
+    phone_number VARCHAR(20), -- Changed from 'phone' to match code
+    training_level VARCHAR(20) CHECK (training_level IN ('STUDENT_PILOT', 'PRIVATE_PILOT', 'INSTRUMENT_RATED')), -- Added training_level
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
