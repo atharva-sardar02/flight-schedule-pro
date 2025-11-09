@@ -186,7 +186,7 @@ export class AuthService {
         try {
           // Extract the base64 part from mock token
           const parts = accessToken.split('.');
-          if (parts.length === 3) {
+          if (parts.length === 3 && parts[1]) {
             const decoded = JSON.parse(Buffer.from(parts[1], 'base64').toString());
             
             logger.info('Using mock token verification', { email: decoded.email });
@@ -197,8 +197,8 @@ export class AuthService {
               firstName: 'Test',
               lastName: 'User',
               role: (decoded['cognito:groups']?.[0] || 'STUDENT') as UserRole,
-              trainingLevel: null,
-              phoneNumber: null,
+              trainingLevel: undefined,
+              phoneNumber: undefined,
               createdAt: new Date(),
               updatedAt: new Date(),
             };
@@ -331,6 +331,9 @@ export class AuthService {
   static decodeCognitoToken(token: string): CognitoUser {
     try {
       const payload = token.split('.')[1];
+      if (!payload) {
+        throw new Error('Invalid token format');
+      }
       const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
       return decoded as CognitoUser;
     } catch (error) {

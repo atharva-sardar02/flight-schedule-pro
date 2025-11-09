@@ -391,6 +391,16 @@ async function handleGetCurrentUser(
     }
 
     const token = authHeader.split(' ')[1];
+    if (!token) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({
+          error: 'Unauthorized',
+          message: 'Missing authorization token',
+        }),
+      };
+    }
     const cognitoUser = await AuthService.verifyToken(token);
 
     // Skip database lookup for mock auth

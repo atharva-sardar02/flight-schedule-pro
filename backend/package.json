@@ -5,7 +5,7 @@
   "private": true,
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --skipLibCheck",
     "watch": "tsc --watch",
     "start": "node dist/dev-server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/dev-server.ts",

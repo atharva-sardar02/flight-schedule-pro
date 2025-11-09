@@ -66,7 +66,7 @@ app.use(cors({
 app.use(express.json());
 
 // Health check endpoint (Express route)
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.json({ 
     status: 'healthy', 
     service: 'flight-schedule-pro-backend',
@@ -144,7 +144,8 @@ app.get('/test-root', async (req, res) => {
       try {
         const { email } = req.body;
         if (!email) {
-          return res.status(400).json({ error: 'Email is required' });
+          res.status(400).json({ error: 'Email is required' });
+          return;
         }
 
         const client = new CognitoIdentityProviderClient({
@@ -170,12 +171,14 @@ app.get('/test-root', async (req, res) => {
       try {
         const authHeader = req.headers.authorization;
         if (!authHeader) {
-          return res.status(401).json({ error: 'Authorization header required' });
+          res.status(401).json({ error: 'Authorization header required' });
+          return;
         }
 
         const token = authHeader.split(' ')[1];
         if (!token) {
-          return res.status(401).json({ error: 'Token required' });
+          res.status(401).json({ error: 'Token required' });
+          return;
         }
 
         // Get user from Cognito
@@ -189,11 +192,12 @@ app.get('/test-root', async (req, res) => {
         );
 
         if (existingUser.rows.length > 0) {
-          return res.json({
+          res.json({
             success: true,
             message: 'User already exists in database',
             userId: existingUser.rows[0].id,
           });
+          return;
         }
 
         // Create user record in database
@@ -226,7 +230,7 @@ app.get('/test-root', async (req, res) => {
   }
 
 // API Routes (will be added as we build features)
-app.get('/api', (req, res) => {
+app.get('/api', (_req, res) => {
   res.json({ 
     message: 'Flight Schedule Pro API',
     version: '0.1.0',
@@ -467,7 +471,7 @@ app.use('/preferences/:action?/:bookingId?', async (req, res) => {
 });
 
 // Error handling middleware
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error('Unhandled error:', err);
   res.status(500).json({ 
     error: 'Internal server error',
