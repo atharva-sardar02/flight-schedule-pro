@@ -629,24 +629,26 @@ app.use('/reschedule/:action?/:bookingId?', async (req, res) => {
 });
 
 // Preferences Routes
-app.use('/preferences/:action?/:bookingId?', async (req, res) => {
+// Use a wildcard pattern to match all /preferences/* routes
+app.all('/preferences*', async (req, res) => {
   try {
-    let path = '/preferences';
-    if (req.params.action) {
-      path += `/${req.params.action}`;
-      if (req.params.bookingId) {
-        path += `/${req.params.bookingId}`;
-      }
-    }
-
-    // Extract bookingId from params or path
-    let bookingId = req.params.bookingId;
-    if (!bookingId && req.params.action === 'my') {
-      // For /preferences/my/:bookingId, bookingId is the second param
-      const pathParts = req.path.split('/').filter(Boolean);
-      const myIndex = pathParts.indexOf('my');
-      if (myIndex >= 0 && myIndex < pathParts.length - 1) {
-        bookingId = pathParts[myIndex + 1];
+    // Use the actual request path
+    const path = req.path;
+    
+    // Extract bookingId from path segments
+    const pathParts = req.path.split('/').filter(Boolean);
+    let bookingId: string | null = null;
+    
+    // Check for bookingId in various patterns:
+    // /preferences/my/:bookingId
+    // /preferences/booking/:bookingId
+    // /preferences/escalate/:bookingId
+    if (pathParts.length >= 3) {
+      // bookingId is the last segment
+      bookingId = pathParts[pathParts.length - 1];
+      // Validate it's a UUID (basic check)
+      if (!bookingId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        bookingId = null;
       }
     }
 
