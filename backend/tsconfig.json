@@ -25,6 +25,7 @@
     "removeComments": true,
     "noImplicitAny": false,
     "strictNullChecks": false,
+    "strictPropertyInitialization": false,
     "strictFunctionTypes": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
