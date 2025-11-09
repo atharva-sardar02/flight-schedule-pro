@@ -629,8 +629,8 @@ app.use('/reschedule/:action?/:bookingId?', async (req, res) => {
 });
 
 // Preferences Routes
-// Match all /preferences/* routes using use() with a path prefix
-app.use('/preferences', async (req, res) => {
+// Use app.all with wildcard to match all /preferences/* routes
+app.all('/preferences*', async (req, res) => {
   try {
     // Use originalUrl to get the full path including /preferences
     // originalUrl includes query string, so we need to split it
