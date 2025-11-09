@@ -276,11 +276,13 @@ async function handleRegister(
         } else {
           // Ensure role is uppercase to match database constraint
           const roleUpper = (data.role || 'STUDENT').toUpperCase();
+          // Ensure training_level is uppercase to match database constraint
+          const trainingLevelUpper = data.trainingLevel ? data.trainingLevel.toUpperCase() : null;
           
           await client.query(
             `INSERT INTO users (cognito_user_id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-            [result.userId, data.email, data.firstName, data.lastName, data.phoneNumber || null, roleUpper, data.trainingLevel || null]
+            [result.userId, data.email, data.firstName, data.lastName, data.phoneNumber || null, roleUpper, trainingLevelUpper]
           );
           logger.info('User record created in database', { 
             userId: result.userId,
