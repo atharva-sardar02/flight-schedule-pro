@@ -25,7 +25,9 @@ export function getDbPool(): Pool {
       // Keep-alive to detect dead connections
       keepAlive: true,
       keepAliveInitialDelayMillis: 10000,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : undefined,
+      ssl: process.env.NODE_ENV === 'production' 
+        ? { rejectUnauthorized: false } // Allow self-signed certificates for RDS
+        : undefined,
       // Application name for monitoring
       application_name: `flight-schedule-pro-${process.env.ENVIRONMENT || 'dev'}`,
     });
@@ -75,7 +77,9 @@ export function getReadReplicaPool(): Pool {
       query_timeout: 5000,
       keepAlive: true,
       keepAliveInitialDelayMillis: 10000,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : undefined,
+      ssl: process.env.NODE_ENV === 'production' 
+        ? { rejectUnauthorized: false } // Allow self-signed certificates for RDS
+        : undefined,
       application_name: `flight-schedule-pro-read-${process.env.ENVIRONMENT || 'dev'}`,
     });
 
