@@ -94,7 +94,9 @@ export class RescheduleEngine {
       // Initial state
       const initialState: RescheduleState = {
         bookingId,
-        originalTime: booking.scheduled_time,
+        originalTime: booking.scheduled_time instanceof Date 
+          ? booking.scheduled_time 
+          : new Date(booking.scheduled_time),
         studentId: booking.student_id,
         instructorId: booking.instructor_id,
         trainingLevel: booking.training_level,
