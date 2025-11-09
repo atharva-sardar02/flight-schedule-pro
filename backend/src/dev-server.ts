@@ -12,8 +12,9 @@ import { AdminConfirmSignUpCommand, CognitoIdentityProviderClient } from '@aws-s
 import AuthService from './services/authService';
 import { getDbPool } from './utils/db';
 
-// Load environment variables from .env file in project root
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+// Load environment variables from .env file in backend directory
+// When compiled, __dirname is dist/, so ../.env points to backend/.env
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 // Log environment status
 console.log('='.repeat(80));
