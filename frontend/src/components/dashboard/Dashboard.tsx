@@ -12,6 +12,9 @@ import { LoadingSpinner } from '../common/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import BookingService from '@/services/booking';
+import { Booking, BookingStatus } from '@/types/booking';
+import { UserRole } from '@/types/user';
 
 interface DashboardData {
   metrics: Array<{
@@ -41,58 +44,186 @@ export function Dashboard() {
   });
 
   useEffect(() => {
-    loadDashboardData();
-    
-    // Auto-refresh every 5 minutes
-    const interval = setInterval(() => {
-      handleRefresh();
-    }, 5 * 60 * 1000);
+    if (user) {
+      loadDashboardData();
+      
+      // Auto-refresh every 5 minutes
+      const interval = setInterval(() => {
+        handleRefresh();
+      }, 5 * 60 * 1000);
 
-    return () => clearInterval(interval);
-  }, []);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
       
-      // TODO: Replace with actual API calls
-      // For now, using mock data
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+      if (!user?.id) {
+        console.error('User not available');
+        return;
+      }
+
+      // Calculate date range for this month
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
       
+      // Build filters based on user role
+      const filters: any = {
+        startDate: startOfMonth.toISOString().split('T')[0],
+        endDate: endOfMonth.toISOString().split('T')[0],
+        limit: 100, // Get all bookings for the month
+      };
+
+      if (user.role === UserRole.STUDENT) {
+        filters.studentId = user.id;
+      } else if (user.role === UserRole.INSTRUCTOR) {
+        filters.instructorId = user.id;
+      }
+      // Admins see all bookings (no filter)
+
+      // Fetch bookings
+      const bookings = await BookingService.listBookings(filters);
+
+      // Calculate metrics
+      const totalFlights = bookings.length;
+      const activeAlerts = bookings.filter(b => b.status === BookingStatus.AT_RISK).length;
+      const successfulReschedules = bookings.filter(b => b.originalBookingId).length;
+      const confirmedFlights = bookings.filter(b => b.status === BookingStatus.CONFIRMED).length;
+      
+      // Get previous month for comparison (simplified - just show current month data)
+      const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      
+      const prevFilters = {
+        ...filters,
+        startDate: previousMonthStart.toISOString().split('T')[0],
+        endDate: previousMonthEnd.toISOString().split('T')[0],
+      };
+      
+      let previousBookings: Booking[] = [];
+      try {
+        previousBookings = await BookingService.listBookings(prevFilters);
+      } catch (err) {
+        console.warn('Could not fetch previous month data:', err);
+      }
+
+      const prevTotalFlights = previousBookings.length;
+      const prevActiveAlerts = previousBookings.filter(b => b.status === BookingStatus.AT_RISK).length;
+      const prevReschedules = previousBookings.filter(b => b.originalBookingId).length;
+
+      // Calculate changes
+      const totalFlightsChange = prevTotalFlights > 0 
+        ? Math.round(((totalFlights - prevTotalFlights) / prevTotalFlights) * 100)
+        : totalFlights > 0 ? 100 : 0;
+      
+      const alertsChange = prevActiveAlerts > 0
+        ? Math.round(((activeAlerts - prevActiveAlerts) / prevActiveAlerts) * 100)
+        : activeAlerts > 0 ? 100 : 0;
+
+      const reschedulesChange = prevReschedules > 0
+        ? Math.round(((successfulReschedules - prevReschedules) / prevReschedules) * 100)
+        : successfulReschedules > 0 ? 100 : 0;
+
+      // Get upcoming bookings (next 7 days) for flight status
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      const upcomingBookings = bookings
+        .filter(b => {
+          const scheduledDate = new Date(b.scheduledDatetime);
+          return scheduledDate >= now && scheduledDate <= nextWeek && b.status !== BookingStatus.CANCELLED;
+        })
+        .sort((a, b) => new Date(a.scheduledDatetime).getTime() - new Date(b.scheduledDatetime).getTime())
+        .slice(0, 5); // Show top 5 upcoming
+
+      // Map bookings to flight status format
+      const flightStatusBookings = upcomingBookings.map(booking => ({
+        id: booking.id,
+        scheduledTime: booking.scheduledDatetime,
+        status: booking.status as any,
+        departureAirport: booking.departureAirport,
+        arrivalAirport: booking.arrivalAirport,
+        studentName: 'Student', // TODO: Fetch user details
+        instructorName: 'Instructor', // TODO: Fetch user details
+        aircraftType: booking.aircraftId || 'N/A',
+        trainingLevel: booking.trainingLevel,
+      }));
+
+      // Map AT_RISK bookings to weather alerts
+      const weatherAlerts = bookings
+        .filter(b => b.status === BookingStatus.AT_RISK)
+        .map(booking => ({
+          id: booking.id,
+          bookingId: booking.id,
+          flightInfo: {
+            scheduledTime: booking.scheduledDatetime,
+            route: `${booking.departureAirport} → ${booking.arrivalAirport}`,
+            trainingLevel: booking.trainingLevel,
+          },
+          weather: {
+            visibility: 0, // TODO: Fetch actual weather data
+            windSpeed: 0,
+            ceiling: 0,
+            conditions: 'Unknown',
+          },
+          severity: 'warning' as const,
+          detectedAt: booking.updatedAt,
+        }));
+
       setDashboardData({
         metrics: [
           {
             label: 'Total Flights',
-            value: 24,
-            change: { value: 12, trend: 'up' },
+            value: totalFlights,
+            change: { 
+              value: Math.abs(totalFlightsChange), 
+              trend: totalFlightsChange >= 0 ? 'up' : 'down' 
+            },
             description: 'Scheduled this month',
           },
           {
             label: 'Active Alerts',
-            value: 3,
-            change: { value: -25, trend: 'down' },
+            value: activeAlerts,
+            change: { 
+              value: Math.abs(alertsChange), 
+              trend: alertsChange <= 0 ? 'down' : 'up' 
+            },
             description: 'Weather conflicts detected',
           },
           {
             label: 'Successful Reschedules',
-            value: 18,
-            change: { value: 8, trend: 'up' },
+            value: successfulReschedules,
+            change: { 
+              value: Math.abs(reschedulesChange), 
+              trend: reschedulesChange >= 0 ? 'up' : 'down' 
+            },
             description: 'Completed this month',
           },
           {
-            label: 'Avg Response Time',
-            value: '4.2h',
-            change: { value: -15, trend: 'down' },
-            description: 'Preference submission time',
+            label: 'Confirmed Flights',
+            value: confirmedFlights,
+            change: { 
+              value: 0, 
+              trend: 'neutral' as const 
+            },
+            description: 'Ready to fly',
           },
         ],
-        weatherAlerts: [],
-        bookings: [],
+        weatherAlerts,
+        bookings: flightStatusBookings,
       });
       
       setLastUpdated(new Date());
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
+      // Set empty data on error
+      setDashboardData({
+        metrics: [],
+        weatherAlerts: [],
+        bookings: [],
+      });
     } finally {
       setLoading(false);
     }
