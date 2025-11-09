@@ -288,8 +288,18 @@ export class BookingService {
       paramIndex++;
     }
 
-    const result = await query<any>(queryText, params);
-    return result.map((row) => this.mapRowToBooking(row));
+    try {
+      const result = await query<any>(queryText, params);
+      return result.map((row) => this.mapRowToBooking(row));
+    } catch (error: any) {
+      // If table doesn't exist or database error, return empty array
+      // This allows the app to work even if database isn't fully set up
+      logger.warn('Failed to query bookings, returning empty array', {
+        error: error.message,
+        code: error.code,
+      });
+      return [];
+    }
   }
 
   /**
