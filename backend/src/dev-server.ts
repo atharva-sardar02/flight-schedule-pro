@@ -619,9 +619,11 @@ app.use('/preferences/:action?/:bookingId?', async (req, res) => {
 // Notifications Routes
 app.get('/notifications', requireAuth, async (req: any, res) => {
   try {
+    logger.info('Notifications endpoint hit', { userId: req.user?.id });
     const pool = getDbPool();
     const notifier = new InAppNotifier(pool);
     const notifications = await notifier.getNotifications(req.user.id, 50);
+    logger.info('Notifications retrieved', { userId: req.user.id, count: notifications.length });
     res.json(notifications);
   } catch (error: any) {
     logger.error('Get notifications error:', error);
@@ -643,9 +645,11 @@ app.get('/notifications/unread', requireAuth, async (req: any, res) => {
 
 app.get('/notifications/unread/count', requireAuth, async (req: any, res) => {
   try {
+    logger.info('Notifications unread count endpoint hit', { userId: req.user?.id });
     const pool = getDbPool();
     const notifier = new InAppNotifier(pool);
     const count = await notifier.getUnreadCount(req.user.id);
+    logger.info('Unread count retrieved', { userId: req.user.id, count });
     res.json({ count });
   } catch (error: any) {
     logger.error('Get unread count error:', error);
