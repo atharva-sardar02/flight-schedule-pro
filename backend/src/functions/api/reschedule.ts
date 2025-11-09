@@ -9,6 +9,8 @@ import { RescheduleEngine } from '../ai/rescheduleEngine';
 import { PreferenceRankingService } from '../../services/preferenceRankingService';
 import { RescheduleOptionsService } from '../../services/rescheduleOptionsService';
 import { WeatherService } from '../../services/weatherService';
+import { AvailabilityService } from '../../services/availabilityService';
+import { format } from 'date-fns';
 import { EmailService } from '../notifications/emailService';
 import { requireAuth } from '../../middleware/auth';
 import {
@@ -492,6 +494,111 @@ async function handleConfirmReschedule(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ error: 'Selected option not found' }),
       };
+    }
+
+    const newScheduledTime = new Date(selectedOption.suggestedDatetime);
+
+    // RE-VALIDATE AVAILABILITY before confirmation
+    // Check student calendar, instructor calendar, and booking conflicts
+    logInfo('Re-validating availability before confirmation', {
+      bookingId,
+      newTime: newScheduledTime.toISOString(),
+      studentId: booking.student_id,
+      instructorId: booking.instructor_id,
+    });
+
+    try {
+      // Check student availability
+      const availabilityService = new AvailabilityService(pool);
+      const dateStr = format(newScheduledTime, 'yyyy-MM-dd');
+      const timeStr = format(newScheduledTime, 'HH:mm');
+      
+      const studentAvailability = await availabilityService.getAvailability({
+        userId: booking.student_id,
+        startDate: dateStr,
+        endDate: dateStr,
+      });
+      
+      const studentAvailable = studentAvailability.slots.some((slot) => {
+        const slotDate = format(new Date(slot.date), 'yyyy-MM-dd');
+        if (slotDate !== dateStr) return false;
+        if (!slot.isAvailable) return false;
+        return timeStr >= slot.startTime && timeStr <= slot.endTime;
+      });
+
+      // Check instructor availability
+      const instructorAvailability = await availabilityService.getAvailability({
+        userId: booking.instructor_id,
+        startDate: dateStr,
+        endDate: dateStr,
+      });
+      
+      const instructorAvailable = instructorAvailability.slots.some((slot) => {
+        const slotDate = format(new Date(slot.date), 'yyyy-MM-dd');
+        if (slotDate !== dateStr) return false;
+        if (!slot.isAvailable) return false;
+        return timeStr >= slot.startTime && timeStr <= slot.endTime;
+      });
+
+      // Check for booking conflicts
+      const slotStart = new Date(newScheduledTime);
+      slotStart.setMinutes(slotStart.getMinutes() - 30);
+      const slotEnd = new Date(newScheduledTime);
+      slotEnd.setMinutes(slotEnd.getMinutes() + 90);
+
+      const conflictResult = await pool.query(
+        `SELECT id, scheduled_datetime, status
+         FROM bookings
+         WHERE status IN ('CONFIRMED', 'AT_RISK', 'RESCHEDULING', 'RESCHEDULED')
+           AND scheduled_datetime >= $1
+           AND scheduled_datetime <= $2
+           AND (student_id = $3 OR instructor_id = $4)
+           AND id != $5`,
+        [slotStart, slotEnd, booking.student_id, booking.instructor_id, bookingId]
+      );
+
+      const hasBookingConflict = conflictResult.rows.length > 0;
+
+      if (!studentAvailable || !instructorAvailable || hasBookingConflict) {
+        logInfo('Availability check failed at confirmation', {
+          bookingId,
+          studentAvailable,
+          instructorAvailable,
+          hasBookingConflict,
+          conflictingBookings: conflictResult.rows.map((r: any) => ({
+            id: r.id,
+            scheduled: r.scheduled_datetime,
+            status: r.status,
+          })),
+        });
+
+        return {
+          statusCode: 409,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Availability conflict detected',
+            reason: !studentAvailable 
+              ? 'Student is not available at this time'
+              : !instructorAvailable
+              ? 'Instructor is not available at this time'
+              : 'Another booking conflicts with this time',
+            requiresNewOptions: true,
+            newOptionsGenerated: false,
+            message: 'Availability has changed. Please generate new reschedule options.',
+          }),
+        };
+      }
+
+      logInfo('Availability check passed', {
+        bookingId,
+        newTime: newScheduledTime.toISOString(),
+      });
+    } catch (availabilityError: any) {
+      // Log error but allow confirmation to proceed (graceful degradation)
+      logError('Availability re-validation error (proceeding with confirmation)', availabilityError, {
+        bookingId,
+        newTime: newScheduledTime.toISOString(),
+      });
     }
 
     // RE-VALIDATE WEATHER before confirmation (with timeout and graceful degradation)

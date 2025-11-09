@@ -97,9 +97,9 @@ export class RescheduleEngine {
       // Initial state
       const initialState: RescheduleState = {
         bookingId,
-        originalTime: booking.scheduled_time instanceof Date 
-          ? booking.scheduled_time 
-          : new Date(booking.scheduled_time),
+        originalTime: (booking.scheduled_datetime || booking.scheduled_time) instanceof Date 
+          ? (booking.scheduled_datetime || booking.scheduled_time)
+          : new Date(booking.scheduled_datetime || booking.scheduled_time),
         studentId: booking.student_id,
         instructorId: booking.instructor_id,
         trainingLevel: booking.training_level,
@@ -183,21 +183,45 @@ export class RescheduleEngine {
     try {
       logInfo('Finding candidate slots', { 
         bookingId: state.bookingId,
-        originalTime: state.originalTime.toISOString()
+        originalTime: state.originalTime instanceof Date ? state.originalTime.toISOString() : String(state.originalTime)
       });
 
       const candidates: CandidateSlot[] = [];
       const now = new Date();
       
+      // Validate original time
+      if (!state.originalTime || !(state.originalTime instanceof Date)) {
+        throw new Error('Invalid original time provided');
+      }
+      
       // Start from original booking date, not today
       // Look 7 days before and 7 days after the original date (14-day window total)
       // But prioritize dates around the original date
       const originalDate = new Date(state.originalTime);
+      
+      // Validate original date
+      if (isNaN(originalDate.getTime())) {
+        throw new Error('Original date is invalid');
+      }
+      
       const startDate = addDays(originalDate, -7); // 7 days before original
       const endDate = addDays(originalDate, 7); // 7 days after original
       
       // Ensure we don't go into the past (can't reschedule to past dates)
-      const actualStartDate = startDate < now ? now : startDate;
+      const actualStartDate = startDate < now ? new Date(now) : startDate;
+      
+      // Ensure endDate is in the future
+      if (endDate < now) {
+        // If original date was in the past, extend the window forward
+        const daysFromNow = Math.ceil((now.getTime() - originalDate.getTime()) / (1000 * 60 * 60 * 24));
+        const newEndDate = addDays(now, 7);
+        logInfo('Original date is in the past, extending window forward', {
+          originalDate: originalDate.toISOString(),
+          daysFromNow,
+          newEndDate: newEndDate.toISOString(),
+        });
+        return this.findCandidateSlotsWithDateRange(state, now, newEndDate);
+      }
 
       logInfo('Date range for candidate slots', {
         originalDate: originalDate.toISOString(),
@@ -207,61 +231,87 @@ export class RescheduleEngine {
 
       // Generate time slots (every 2 hours during typical flying hours: 8AM - 6PM)
       let currentDate = new Date(actualStartDate);
-      while (currentDate <= endDate) {
+      // Set to start of day to avoid timezone issues
+      currentDate.setHours(0, 0, 0, 0);
+      
+      const endDateCopy = new Date(endDate);
+      endDateCopy.setHours(23, 59, 59, 999);
+      
+      while (currentDate <= endDateCopy) {
         for (let hour = 8; hour <= 18; hour += 2) {
-          const slotTime = new Date(currentDate);
-          slotTime.setHours(hour, 0, 0, 0);
+          try {
+            const slotTime = new Date(currentDate);
+            slotTime.setHours(hour, 0, 0, 0);
+            
+            // Validate the date
+            if (isNaN(slotTime.getTime())) {
+              logWarn('Invalid slot time generated, skipping', {
+                currentDate: currentDate.toISOString(),
+                hour,
+              });
+              continue;
+            }
 
-          // Skip if in the past
-          if (slotTime < now) {
+            // Skip if in the past
+            if (slotTime < now) {
+              continue;
+            }
+
+            // Calculate proximity score (closer to original time = better)
+            // Higher score for slots closer to original booking time
+            const hoursDiff = Math.abs(
+              (slotTime.getTime() - state.originalTime.getTime()) / (1000 * 60 * 60)
+            );
+            
+            // Prioritize slots around the original date:
+            // - Same day as original: 100 points
+            // - 1 day difference: 80 points
+            // - 2 days difference: 60 points
+            // - 3+ days difference: 40 points
+            // Then subtract based on hour difference within the day
+            let proximityScore = 100;
+            const daysDiff = Math.abs(
+              Math.floor((slotTime.getTime() - originalDate.getTime()) / (1000 * 60 * 60 * 24))
+            );
+            
+            if (daysDiff === 0) {
+              // Same day - prioritize same hour, then nearby hours
+              const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
+              proximityScore = 100 - (hourDiff * 5); // -5 points per hour difference
+            } else if (daysDiff === 1) {
+              // 1 day difference
+              const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
+              proximityScore = 80 - (hourDiff * 3);
+            } else if (daysDiff === 2) {
+              // 2 days difference
+              const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
+              proximityScore = 60 - (hourDiff * 2);
+            } else {
+              // 3+ days difference
+              const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
+              proximityScore = Math.max(20, 40 - (daysDiff * 5) - (hourDiff * 1));
+            }
+            
+            // Ensure score is positive
+            proximityScore = Math.max(0, proximityScore);
+
+            candidates.push({
+              datetime: slotTime,
+              score: proximityScore,
+              reason: `Generated slot (${daysDiff} days from original, ${Math.abs(slotTime.getHours() - originalDate.getHours())} hours difference)`,
+            });
+          } catch (slotError: any) {
+            logWarn('Error generating slot, skipping', {
+              currentDate: currentDate.toISOString(),
+              hour,
+              error: slotError.message,
+            });
             continue;
           }
-
-          // Calculate proximity score (closer to original time = better)
-          // Higher score for slots closer to original booking time
-          const hoursDiff = Math.abs(
-            (slotTime.getTime() - state.originalTime.getTime()) / (1000 * 60 * 60)
-          );
-          
-          // Prioritize slots around the original date:
-          // - Same day as original: 100 points
-          // - 1 day difference: 80 points
-          // - 2 days difference: 60 points
-          // - 3+ days difference: 40 points
-          // Then subtract based on hour difference within the day
-          let proximityScore = 100;
-          const daysDiff = Math.abs(
-            Math.floor((slotTime.getTime() - originalDate.getTime()) / (1000 * 60 * 60 * 24))
-          );
-          
-          if (daysDiff === 0) {
-            // Same day - prioritize same hour, then nearby hours
-            const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
-            proximityScore = 100 - (hourDiff * 5); // -5 points per hour difference
-          } else if (daysDiff === 1) {
-            // 1 day difference
-            const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
-            proximityScore = 80 - (hourDiff * 3);
-          } else if (daysDiff === 2) {
-            // 2 days difference
-            const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
-            proximityScore = 60 - (hourDiff * 2);
-          } else {
-            // 3+ days difference
-            const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
-            proximityScore = Math.max(20, 40 - (daysDiff * 5) - (hourDiff * 1));
-          }
-          
-          // Ensure score is positive
-          proximityScore = Math.max(0, proximityScore);
-
-          candidates.push({
-            datetime: slotTime,
-            score: proximityScore,
-            reason: `Generated slot (${daysDiff} days from original, ${Math.abs(slotTime.getHours() - originalDate.getHours())} hours difference)`,
-          });
         }
+        // Move to next day
         currentDate = addDays(currentDate, 1);
+        currentDate.setHours(0, 0, 0, 0);
       }
 
       // Sort by proximity score (highest first) to prioritize slots closer to original date
@@ -274,11 +324,87 @@ export class RescheduleEngine {
         topDate: candidates[0]?.datetime.toISOString(),
       });
 
+      if (candidates.length === 0) {
+        logWarn('No candidate slots generated', {
+          bookingId: state.bookingId,
+          originalDate: originalDate.toISOString(),
+          now: now.toISOString(),
+        });
+        return { error: 'No valid time slots available in 7-day window' };
+      }
+
       return { candidateSlots: candidates };
     } catch (error: any) {
       logError('Failed to find candidate slots', error);
       return { error: error.message };
     }
+  }
+
+  /**
+   * Helper: Find candidate slots with a specific date range
+   */
+  private async findCandidateSlotsWithDateRange(
+    state: RescheduleState,
+    startDate: Date,
+    endDate: Date
+  ): Promise<Partial<RescheduleState>> {
+    const candidates: CandidateSlot[] = [];
+    const now = new Date();
+    const originalDate = new Date(state.originalTime);
+    
+    let currentDate = new Date(startDate);
+    currentDate.setHours(0, 0, 0, 0);
+    
+    const endDateCopy = new Date(endDate);
+    endDateCopy.setHours(23, 59, 59, 999);
+    
+    while (currentDate <= endDateCopy) {
+      for (let hour = 8; hour <= 18; hour += 2) {
+        try {
+          const slotTime = new Date(currentDate);
+          slotTime.setHours(hour, 0, 0, 0);
+          
+          if (isNaN(slotTime.getTime()) || slotTime < now) {
+            continue;
+          }
+
+          // Calculate proximity score
+          const daysDiff = Math.abs(
+            Math.floor((slotTime.getTime() - originalDate.getTime()) / (1000 * 60 * 60 * 24))
+          );
+          
+          let proximityScore = 100;
+          if (daysDiff === 0) {
+            const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
+            proximityScore = 100 - (hourDiff * 5);
+          } else if (daysDiff === 1) {
+            const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
+            proximityScore = 80 - (hourDiff * 3);
+          } else if (daysDiff === 2) {
+            const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
+            proximityScore = 60 - (hourDiff * 2);
+          } else {
+            const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
+            proximityScore = Math.max(20, 40 - (daysDiff * 5) - (hourDiff * 1));
+          }
+          
+          proximityScore = Math.max(0, proximityScore);
+
+          candidates.push({
+            datetime: slotTime,
+            score: proximityScore,
+            reason: `Generated slot (${daysDiff} days from original)`,
+          });
+        } catch (slotError: any) {
+          continue;
+        }
+      }
+      currentDate = addDays(currentDate, 1);
+      currentDate.setHours(0, 0, 0, 0);
+    }
+
+    candidates.sort((a, b) => b.score - a.score);
+    return { candidateSlots: candidates };
   }
 
   /**
@@ -346,6 +472,7 @@ export class RescheduleEngine {
 
   /**
    * Step 3: Check availability for weather-valid slots
+   * Validates: student calendar, instructor calendar, and no existing bookings
    */
   private async checkAvailabilityForSlots(
     state: RescheduleState
@@ -356,19 +483,40 @@ export class RescheduleEngine {
       const validated: ValidatedSlot[] = [];
 
       for (const slot of state.validatedSlots) {
-        // Check student availability
+        // Check student calendar availability
         const studentAvailable = await this.checkUserAvailability(
           state.studentId,
           slot.datetime
         );
 
-        // Check instructor availability
+        // Check instructor calendar availability
         const instructorAvailable = await this.checkUserAvailability(
           state.instructorId,
           slot.datetime
         );
 
-        const availabilityValid = studentAvailable && instructorAvailable;
+        // Check for existing bookings at this time (conflict check)
+        const hasBookingConflict = await this.checkBookingConflict(
+          state.studentId,
+          state.instructorId,
+          slot.datetime,
+          state.bookingId // Exclude current booking from conflict check
+        );
+
+        // Slot is valid only if:
+        // 1. Student is available in their calendar
+        // 2. Instructor is available in their calendar
+        // 3. No existing bookings conflict with this time
+        const availabilityValid = studentAvailable && instructorAvailable && !hasBookingConflict;
+
+        if (!availabilityValid) {
+          logInfo('Slot failed availability check', {
+            slot: slot.datetime.toISOString(),
+            studentAvailable,
+            instructorAvailable,
+            hasBookingConflict,
+          });
+        }
 
         validated.push({
           ...slot,
@@ -380,10 +528,32 @@ export class RescheduleEngine {
       // Filter to only fully valid slots
       const fullyValidSlots = validated.filter((s) => s.availabilityValid);
 
+      // Count invalid reasons for logging
+      let studentUnavailableCount = 0;
+      let instructorUnavailableCount = 0;
+      let bookingConflictCount = 0;
+      
+      for (const slot of validated) {
+        if (!slot.availabilityValid) {
+          const studentAvail = await this.checkUserAvailability(state.studentId, slot.datetime);
+          const instructorAvail = await this.checkUserAvailability(state.instructorId, slot.datetime);
+          const hasConflict = await this.checkBookingConflict(state.studentId, state.instructorId, slot.datetime, state.bookingId);
+          
+          if (!studentAvail) studentUnavailableCount++;
+          if (!instructorAvail) instructorUnavailableCount++;
+          if (hasConflict) bookingConflictCount++;
+        }
+      }
+
       logInfo('Availability check complete', {
         bookingId: state.bookingId,
         weatherValidSlots: state.validatedSlots.length,
         fullyValidSlots: fullyValidSlots.length,
+        invalidReasons: {
+          studentUnavailable: studentUnavailableCount,
+          instructorUnavailable: instructorUnavailableCount,
+          bookingConflict: bookingConflictCount,
+        },
       });
 
       return { validatedSlots: fullyValidSlots };
@@ -628,7 +798,7 @@ Please select the top 3 best options for rescheduling, considering proximity to 
   }
 
   /**
-   * Check if a user is available at a specific time
+   * Check if a user is available at a specific time (calendar check)
    */
   private async checkUserAvailability(userId: string, datetime: Date): Promise<boolean> {
     try {
@@ -643,7 +813,7 @@ Please select the top 3 best options for rescheduling, considering proximity to 
       });
 
       // Check if any slot covers the requested time
-      return availability.slots.some((slot) => {
+      const isAvailable = availability.slots.some((slot) => {
         const slotDate = format(new Date(slot.date), 'yyyy-MM-dd');
         if (slotDate !== dateStr) return false;
         if (!slot.isAvailable) return false;
@@ -654,8 +824,90 @@ Please select the top 3 best options for rescheduling, considering proximity to 
 
         return timeStr >= slotStart && timeStr <= slotEnd;
       });
+
+      if (!isAvailable) {
+        logInfo('User not available in calendar', {
+          userId,
+          datetime: datetime.toISOString(),
+          dateStr,
+          timeStr,
+        });
+      }
+
+      return isAvailable;
     } catch (error: any) {
-      logError('Failed to check user availability', error, { userId, datetime });
+      logWarn('Failed to check user availability, assuming unavailable', {
+        userId,
+        datetime: datetime.toISOString(),
+        error: error.message,
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Check if there's a booking conflict at a specific time
+   * Returns true if there's a conflict (another booking exists), false if clear
+   */
+  private async checkBookingConflict(
+    studentId: string,
+    instructorId: string,
+    datetime: Date,
+    excludeBookingId?: string
+  ): Promise<boolean> {
+    try {
+      // Check for existing bookings at this time
+      // Look for bookings where:
+      // - Same student OR same instructor
+      // - Scheduled time overlaps (within 1 hour window to account for flight duration)
+      // - Status is CONFIRMED, AT_RISK, RESCHEDULING, or RESCHEDULED (active bookings)
+      // - Exclude the current booking being rescheduled
+      
+      const slotStart = new Date(datetime);
+      slotStart.setMinutes(slotStart.getMinutes() - 30); // 30 min buffer before
+      
+      const slotEnd = new Date(datetime);
+      slotEnd.setMinutes(slotEnd.getMinutes() + 90); // 90 min buffer after (typical flight is 60-90 min)
+
+      let query = `
+        SELECT id, scheduled_datetime, status, student_id, instructor_id
+        FROM bookings
+        WHERE status IN ('CONFIRMED', 'AT_RISK', 'RESCHEDULING', 'RESCHEDULED')
+          AND scheduled_datetime >= $1
+          AND scheduled_datetime <= $2
+          AND (student_id = $3 OR instructor_id = $4)
+      `;
+      
+      const params: any[] = [slotStart, slotEnd, studentId, instructorId];
+      
+      if (excludeBookingId) {
+        query += ` AND id != $5`;
+        params.push(excludeBookingId);
+      }
+
+      const result = await this.pool.query(query, params);
+
+      if (result.rows.length > 0) {
+        logInfo('Booking conflict detected', {
+          datetime: datetime.toISOString(),
+          conflictingBookings: result.rows.map((r: any) => ({
+            id: r.id,
+            scheduled: r.scheduled_datetime,
+            status: r.status,
+          })),
+        });
+        return true; // Conflict exists
+      }
+
+      return false; // No conflict
+    } catch (error: any) {
+      logWarn('Failed to check booking conflict, assuming no conflict', {
+        studentId,
+        instructorId,
+        datetime: datetime.toISOString(),
+        error: error.message,
+      });
+      // On error, assume no conflict to allow rescheduling to proceed
       return false;
     }
   }
