@@ -632,10 +632,16 @@ app.use('/reschedule/:action?/:bookingId?', async (req, res) => {
 // Match all /preferences/* routes using use() with a path prefix
 app.use('/preferences', async (req, res) => {
   try {
-    // When using app.use('/preferences', ...), Express strips the prefix from req.path
-    // So req.path for /preferences/my/123 would be /my/123
-    // We need to reconstruct the full path
-    const fullPath = `/preferences${req.path === '/' ? '' : req.path}`;
+    // Use originalUrl to get the full path including /preferences
+    // originalUrl includes query string, so we need to split it
+    const fullPath = req.originalUrl.split('?')[0];
+    
+    logger.info('Preferences route hit', { 
+      method: req.method, 
+      originalUrl: req.originalUrl,
+      path: req.path,
+      fullPath: fullPath
+    });
     
     // Extract bookingId from path segments
     const pathParts = fullPath.split('/').filter(Boolean);
