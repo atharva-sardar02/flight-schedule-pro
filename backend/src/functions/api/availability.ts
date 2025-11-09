@@ -220,14 +220,22 @@ async function handleRecurringAvailability(
 // ============================================================================
 
 /**
+ * Format date as YYYY-MM-DD string using local date components
+ * This prevents timezone shifts when serializing to JSON
+ */
+function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Format override date as YYYY-MM-DD string using local date components
  * This prevents timezone shifts when serializing to JSON
  */
 function formatOverrideDate(overrideDate: Date): string {
-  const year = overrideDate.getFullYear();
-  const month = String(overrideDate.getMonth() + 1).padStart(2, '0');
-  const day = String(overrideDate.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return formatDateLocal(overrideDate);
 }
 
 async function handleAvailabilityOverrides(
@@ -376,12 +384,12 @@ async function handleGetAvailability(
       endDate,
     });
 
-    // Serialize dates to ISO strings for JSON response
+    // Serialize dates to YYYY-MM-DD strings using local date components (not UTC)
     const serializedAvailability = {
       ...availability,
       slots: availability.slots.map((slot) => ({
         ...slot,
-        date: slot.date instanceof Date ? slot.date.toISOString().split('T')[0] : slot.date,
+        date: slot.date instanceof Date ? formatDateLocal(slot.date) : slot.date,
       })),
       recurringPatterns: availability.recurringPatterns.map((pattern) => ({
         ...pattern,

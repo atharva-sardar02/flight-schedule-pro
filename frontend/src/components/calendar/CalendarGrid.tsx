@@ -34,8 +34,31 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, en
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   // Helper to format date in local timezone (YYYY-MM-DD)
+  // CRITICAL: If date is a string in YYYY-MM-DD format, use it directly
+  // Otherwise, parse as local date to avoid timezone shifts
   const formatDateLocal = (date: Date | string): string => {
-    const d = typeof date === 'string' ? new Date(date) : date;
+    // If it's already a YYYY-MM-DD string, use it directly
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return date;
+    }
+    
+    // If it's a string but not YYYY-MM-DD, parse it carefully
+    let d: Date;
+    if (typeof date === 'string') {
+      // Try to parse as YYYY-MM-DD first
+      const dateMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (dateMatch) {
+        const year = parseInt(dateMatch[1], 10);
+        const month = parseInt(dateMatch[2], 10) - 1; // Month is 0-indexed
+        const day = parseInt(dateMatch[3], 10);
+        d = new Date(year, month, day); // Local date, not UTC
+      } else {
+        d = new Date(date);
+      }
+    } else {
+      d = date;
+    }
+    
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
