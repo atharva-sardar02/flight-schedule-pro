@@ -495,11 +495,11 @@ async function handleConfirmReschedule(
       newTime: selectedOption.suggestedDatetime,
     });
 
-    // Update booking with new time
+    // Update booking with new time and set status to RESCHEDULED
     await pool.query(
       `UPDATE bookings
        SET scheduled_datetime = $1,
-           status = 'CONFIRMED',
+           status = 'RESCHEDULED',
            updated_at = NOW()
        WHERE id = $2`,
       [selectedOption.suggestedDatetime, bookingId]

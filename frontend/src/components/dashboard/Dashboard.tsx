@@ -90,7 +90,7 @@ export function Dashboard() {
       // Calculate metrics
       const totalFlights = bookings.length;
       const activeAlerts = bookings.filter(b => b.status === BookingStatus.AT_RISK).length;
-      const successfulReschedules = bookings.filter(b => b.originalBookingId).length;
+      const successfulReschedules = bookings.filter(b => b.status === BookingStatus.RESCHEDULED).length;
       const confirmedFlights = bookings.filter(b => b.status === BookingStatus.CONFIRMED).length;
       
       // Get previous month for comparison (simplified - just show current month data)
@@ -112,7 +112,7 @@ export function Dashboard() {
 
       const prevTotalFlights = previousBookings.length;
       const prevActiveAlerts = previousBookings.filter(b => b.status === BookingStatus.AT_RISK).length;
-      const prevReschedules = previousBookings.filter(b => b.originalBookingId).length;
+      const prevReschedules = previousBookings.filter(b => b.status === BookingStatus.RESCHEDULED).length;
 
       // Calculate changes
       const totalFlightsChange = prevTotalFlights > 0 

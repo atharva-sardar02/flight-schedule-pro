@@ -13,7 +13,7 @@ import { formatDateTime, getRelativeTime, isDateToday, isDateTomorrow } from '@/
 interface Booking {
   id: string;
   scheduledTime: string;
-  status: 'CONFIRMED' | 'AT_RISK' | 'CANCELLED' | 'PENDING_RESCHEDULE' | 'ESCALATED';
+  status: 'CONFIRMED' | 'AT_RISK' | 'RESCHEDULING' | 'RESCHEDULED' | 'CANCELLED' | 'PENDING_RESCHEDULE' | 'ESCALATED';
   departureAirport: string;
   arrivalAirport: string;
   studentName: string;
@@ -35,6 +35,10 @@ export function FlightStatus({ bookings = [], loading = false, onViewDetails }: 
         return <Badge className="bg-green-500">Confirmed</Badge>;
       case 'AT_RISK':
         return <Badge className="bg-yellow-500">At Risk</Badge>;
+      case 'RESCHEDULING':
+        return <Badge className="bg-blue-500">Rescheduling</Badge>;
+      case 'RESCHEDULED':
+        return <Badge className="bg-purple-500">Rescheduled</Badge>;
       case 'CANCELLED':
         return <Badge className="bg-gray-500">Cancelled</Badge>;
       case 'PENDING_RESCHEDULE':
@@ -52,6 +56,10 @@ export function FlightStatus({ bookings = [], loading = false, onViewDetails }: 
         return <CheckCircle2 className="h-5 w-5 text-green-600" />;
       case 'AT_RISK':
         return <AlertCircle className="h-5 w-5 text-yellow-600" />;
+      case 'RESCHEDULING':
+        return <Clock className="h-5 w-5 text-blue-600" />;
+      case 'RESCHEDULED':
+        return <CheckCircle2 className="h-5 w-5 text-purple-600" />;
       case 'CANCELLED':
         return <AlertCircle className="h-5 w-5 text-gray-600" />;
       case 'PENDING_RESCHEDULE':

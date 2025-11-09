@@ -91,6 +91,8 @@ export function isValidBookingStatus(status: string): boolean {
     'PENDING',
     'CONFIRMED',
     'AT_RISK',
+    'RESCHEDULING',
+    'RESCHEDULED',
     'WEATHER_CONFLICT',
     'CANCELLED',
     'COMPLETED',
