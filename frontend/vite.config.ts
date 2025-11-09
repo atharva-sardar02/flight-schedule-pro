@@ -26,6 +26,13 @@ export default defineConfig({
     minify: 'esbuild', // Use esbuild for faster builds (built-in)
     // Code splitting and chunk optimization
     rollupOptions: {
+      onwarn(warning, warn) {
+        // Suppress sourcemap warnings
+        if (warning.code === 'SOURCEMAP_ERROR' || warning.message?.includes('sourcemap')) {
+          return;
+        }
+        warn(warning);
+      },
       output: {
         manualChunks: {
           // Vendor chunks for better caching
