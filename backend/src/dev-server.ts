@@ -625,10 +625,21 @@ app.use('/preferences/:action?/:bookingId?', async (req, res) => {
       }
     }
 
+    // Extract bookingId from params or path
+    let bookingId = req.params.bookingId;
+    if (!bookingId && req.params.action === 'my') {
+      // For /preferences/my/:bookingId, bookingId is the second param
+      const pathParts = req.path.split('/').filter(Boolean);
+      const myIndex = pathParts.indexOf('my');
+      if (myIndex >= 0 && myIndex < pathParts.length - 1) {
+        bookingId = pathParts[myIndex + 1];
+      }
+    }
+
     const event = {
       httpMethod: req.method,
       path: path,
-      pathParameters: req.params.bookingId ? { bookingId: req.params.bookingId } : null,
+      pathParameters: bookingId ? { bookingId } : null,
       queryStringParameters: req.query,
       headers: req.headers as { [key: string]: string },
       body: req.body ? JSON.stringify(req.body) : null,

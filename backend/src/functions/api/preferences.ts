@@ -51,7 +51,13 @@ export const preferencesHandler = async (
 
   try {
     // Authenticate request
-    const user = await requireAuth(event);
+    const authResult = await requireAuth(event);
+    
+    if (!authResult.authorized) {
+      return authResult.response;
+    }
+    
+    const user = authResult.user;
 
     const dbPool = getPool();
     const method = event.httpMethod;
@@ -281,7 +287,18 @@ async function handleGetMyPreference(
   pool: Pool
 ): Promise<APIGatewayProxyResult> {
   try {
-    const bookingId = event.pathParameters?.bookingId;
+    // Extract bookingId from path parameters or path segments
+    let bookingId = event.pathParameters?.bookingId;
+    
+    // If not in pathParameters, try to extract from path
+    if (!bookingId) {
+      const pathSegments = event.path.split('/').filter(Boolean);
+      const myIndex = pathSegments.indexOf('my');
+      if (myIndex >= 0 && myIndex < pathSegments.length - 1) {
+        bookingId = pathSegments[myIndex + 1];
+      }
+    }
+    
     if (!bookingId) {
       return {
         statusCode: 400,
