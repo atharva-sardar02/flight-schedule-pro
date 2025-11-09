@@ -142,46 +142,92 @@ async function handleGenerateOptions(
     logInfo('Generating reschedule options', { bookingId, userId: user.id });
 
     const rescheduleEngine = new RescheduleEngine(pool);
-    const options = await rescheduleEngine.generateRescheduleOptions(bookingId);
+    await rescheduleEngine.generateRescheduleOptions(bookingId);
+
+    // Get booking details for airport info
+    const bookingResult = await pool.query(
+      'SELECT student_id, instructor_id, scheduled_datetime, departure_airport, arrival_airport FROM bookings WHERE id = $1',
+      [bookingId]
+    );
+
+    if (bookingResult.rows.length === 0) {
+      return {
+        statusCode: 404,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Booking not found' }),
+      };
+    }
+
+    const booking = bookingResult.rows[0];
+
+    // Fetch options from database to ensure proper format (dates as ISO strings)
+    const optionsService = new RescheduleOptionsService(pool);
+    const options = await optionsService.getOptionsByBooking(bookingId);
 
     // Create preference rankings for both student and instructor
     // This allows both parties to submit their preferences
     try {
-      const bookingResult = await pool.query(
-        'SELECT student_id, instructor_id, scheduled_datetime FROM bookings WHERE id = $1',
-        [bookingId]
+      const scheduledTime = new Date(booking.scheduled_datetime);
+      const preferenceService = new PreferenceRankingService(pool);
+      
+      await preferenceService.createPreferenceRankings(
+        bookingId,
+        booking.student_id,
+        booking.instructor_id,
+        scheduledTime
       );
-
-      if (bookingResult.rows.length > 0) {
-        const booking = bookingResult.rows[0];
-        const scheduledTime = new Date(booking.scheduled_datetime);
-        const preferenceService = new PreferenceRankingService(pool);
-        
-        await preferenceService.createPreferenceRankings(
-          bookingId,
-          booking.student_id,
-          booking.instructor_id,
-          scheduledTime
-        );
-        
-        logInfo('Preference rankings created for student and instructor', {
-          bookingId,
-          studentId: booking.student_id,
-          instructorId: booking.instructor_id,
-        });
-      }
+      
+      logInfo('Preference rankings created for student and instructor', {
+        bookingId,
+        studentId: booking.student_id,
+        instructorId: booking.instructor_id,
+      });
     } catch (error: any) {
       // Log but don't fail - preferences can be created later if needed
       logError('Failed to create preference rankings (non-critical)', error, { bookingId });
     }
+
+    // Map to frontend format (convert Date objects to ISO strings)
+    const formattedOptions = options.map(opt => {
+      // Parse weather forecast to calculate weather score
+      let weatherScore = 0.7; // Default
+      try {
+        const weatherForecast = typeof opt.weatherForecast === 'string' 
+          ? JSON.parse(opt.weatherForecast) 
+          : opt.weatherForecast;
+        if (weatherForecast && Array.isArray(weatherForecast) && weatherForecast.length > 0) {
+          // Calculate average weather score from forecast
+          const scores = weatherForecast.map((w: any) => w.score || 0.7);
+          weatherScore = scores.reduce((a: number, b: number) => a + b, 0) / scores.length;
+        }
+      } catch (e) {
+        // Use default if parsing fails
+      }
+
+      return {
+        id: opt.id,
+        bookingId: opt.bookingId,
+        suggestedDatetime: opt.suggestedDatetime instanceof Date 
+          ? opt.suggestedDatetime.toISOString() 
+          : new Date(opt.suggestedDatetime).toISOString(),
+        departureAirport: booking.departure_airport,
+        arrivalAirport: booking.arrival_airport,
+        weatherScore: weatherScore,
+        confidence: opt.aiConfidenceScore,
+        reasoning: 'AI-generated reschedule option based on availability and weather conditions',
+        createdAt: opt.createdAt instanceof Date 
+          ? opt.createdAt.toISOString() 
+          : new Date(opt.createdAt).toISOString(),
+      };
+    });
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         success: true,
-        options,
-        count: options.length,
+        options: formattedOptions,
+        count: formattedOptions.length,
       }),
     };
   } catch (error: any) {
@@ -215,10 +261,52 @@ async function handleGetOptions(
     const service = new RescheduleOptionsService(pool);
     const options = await service.getOptionsByBooking(bookingId);
 
+    // Get booking details for airport info
+    const bookingResult = await pool.query(
+      'SELECT departure_airport, arrival_airport FROM bookings WHERE id = $1',
+      [bookingId]
+    );
+
+    const booking = bookingResult.rows[0] || { departure_airport: '', arrival_airport: '' };
+
+    // Format options for frontend (convert Date objects to ISO strings)
+    const formattedOptions = options.map(opt => {
+      // Parse weather forecast to calculate weather score
+      let weatherScore = 0.7; // Default
+      try {
+        const weatherForecast = typeof opt.weatherForecast === 'string' 
+          ? JSON.parse(opt.weatherForecast) 
+          : opt.weatherForecast;
+        if (weatherForecast && Array.isArray(weatherForecast) && weatherForecast.length > 0) {
+          // Calculate average weather score from forecast
+          const scores = weatherForecast.map((w: any) => w.score || 0.7);
+          weatherScore = scores.reduce((a: number, b: number) => a + b, 0) / scores.length;
+        }
+      } catch (e) {
+        // Use default if parsing fails
+      }
+
+      return {
+        id: opt.id,
+        bookingId: opt.bookingId,
+        suggestedDatetime: opt.suggestedDatetime instanceof Date 
+          ? opt.suggestedDatetime.toISOString() 
+          : new Date(opt.suggestedDatetime).toISOString(),
+        departureAirport: booking.departure_airport,
+        arrivalAirport: booking.arrival_airport,
+        weatherScore: weatherScore,
+        confidence: opt.aiConfidenceScore,
+        reasoning: 'AI-generated reschedule option based on availability and weather conditions',
+        createdAt: opt.createdAt instanceof Date 
+          ? opt.createdAt.toISOString() 
+          : new Date(opt.createdAt).toISOString(),
+      };
+    });
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ options }),
+      body: JSON.stringify({ options: formattedOptions }),
     };
   } catch (error: any) {
     logError('Failed to get options', error);

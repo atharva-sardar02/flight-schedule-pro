@@ -13,6 +13,14 @@ import { generateRescheduleOptions, getRescheduleOptions, RescheduleOption } fro
 import { format } from 'date-fns';
 import { getUserFriendlyError, showErrorNotification } from '../../utils/errorHandling';
 
+// Helper function to safely format dates
+const safeFormatDate = (dateString: string | null | undefined, formatString: string): string => {
+  if (!dateString) return 'Date not available';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Invalid date';
+  return format(date, formatString);
+};
+
 interface RescheduleOptionsProps {
   bookingId: string;
   onOptionsLoaded?: (options: RescheduleOption[]) => void;
@@ -152,10 +160,10 @@ export function RescheduleOptions({ bookingId, onOptionsLoaded, onContinue }: Re
               <div className="flex items-center text-sm">
                 <Calendar className="mr-2 h-4 w-4 text-gray-500" />
                 <span className="font-medium">
-                  {format(new Date(option.suggestedDatetime), 'EEEE, MMMM d, yyyy')}
+                  {safeFormatDate(option.suggestedDatetime, 'EEEE, MMMM d, yyyy')}
                 </span>
                 <span className="ml-2 text-gray-600">
-                  at {format(new Date(option.suggestedDatetime), 'h:mm a')}
+                  at {safeFormatDate(option.suggestedDatetime, 'h:mm a')}
                 </span>
               </div>
 

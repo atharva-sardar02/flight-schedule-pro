@@ -12,6 +12,14 @@ import { GripVertical, Calendar, MapPin, AlertCircle } from 'lucide-react';
 import { RescheduleOption } from '@/services/rescheduling';
 import { format } from 'date-fns';
 
+// Helper function to safely format dates
+const safeFormatDate = (dateString: string | null | undefined, formatString: string): string => {
+  if (!dateString) return 'Date not available';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Invalid date';
+  return format(date, formatString);
+};
+
 interface PreferenceRankingProps {
   options: RescheduleOption[];
   onSubmit: (ranking: {
@@ -166,8 +174,8 @@ export function PreferenceRanking({
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center text-sm font-medium">
                           <Calendar className="mr-2 h-4 w-4 text-gray-500" />
-                          {format(new Date(option.suggestedDatetime), 'EEE, MMM d')} at{' '}
-                          {format(new Date(option.suggestedDatetime), 'h:mm a')}
+                          {safeFormatDate(option.suggestedDatetime, 'EEE, MMM d')} at{' '}
+                          {safeFormatDate(option.suggestedDatetime, 'h:mm a')}
                         </div>
                         <div className="flex items-center text-sm text-gray-600">
                           <MapPin className="mr-2 h-4 w-4 text-gray-500" />
@@ -216,8 +224,8 @@ export function PreferenceRanking({
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center text-sm font-medium">
                         <Calendar className="mr-2 h-4 w-4 text-gray-500" />
-                        {format(new Date(option.suggestedDatetime), 'EEEE, MMMM d, yyyy')} at{' '}
-                        {format(new Date(option.suggestedDatetime), 'h:mm a')}
+                        {safeFormatDate(option.suggestedDatetime, 'EEEE, MMMM d, yyyy')} at{' '}
+                        {safeFormatDate(option.suggestedDatetime, 'h:mm a')}
                       </div>
                       <div className="flex items-center text-sm text-gray-600">
                         <MapPin className="mr-2 h-4 w-4 text-gray-500" />
@@ -260,7 +268,7 @@ export function PreferenceRanking({
                       className="flex items-center justify-between text-sm text-gray-600 p-2 bg-gray-100 rounded"
                     >
                       <span>
-                        {format(new Date(option.suggestedDatetime), 'MMM d, h:mm a')}
+                        {safeFormatDate(option.suggestedDatetime, 'MMM d, h:mm a')}
                       </span>
                       <Button
                         size="sm"
