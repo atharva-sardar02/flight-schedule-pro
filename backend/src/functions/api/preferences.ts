@@ -129,6 +129,20 @@ async function handleSubmitPreference(
 
     logInfo('Submitting preference', { bookingId, userId: user.id });
 
+    // Check if reschedule options exist first
+    const optionsService = new RescheduleOptionsService(pool);
+    const options = await optionsService.getOptionsByBooking(bookingId);
+    
+    if (!options || options.length === 0) {
+      return {
+        statusCode: 404,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          error: 'Reschedule options not found. Please generate reschedule options first.' 
+        }),
+      };
+    }
+
     const service = new PreferenceRankingService(pool);
 
     // Get existing preference to check deadline
@@ -137,7 +151,9 @@ async function handleSubmitPreference(
       return {
         statusCode: 404,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Preference ranking not found for this booking' }),
+        body: JSON.stringify({ 
+          error: 'Preference ranking not found. This may indicate the reschedule options were not properly initialized.' 
+        }),
       };
     }
 
@@ -313,25 +329,29 @@ async function handleGetMyPreference(
     }
 
     const service = new PreferenceRankingService(pool);
-    const preference = await service.getPreference(bookingId, user.id);
-
-    if (!preference) {
+    
+    // Get reschedule options first to check if they exist
+    const optionsService = new RescheduleOptionsService(pool);
+    const options = await optionsService.getOptionsByBooking(bookingId);
+    
+    // If no options exist, return 404 (can't have preferences without options)
+    if (!options || options.length === 0) {
       return {
         statusCode: 404,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Preference not found' }),
+        body: JSON.stringify({ error: 'Reschedule options not found for this booking' }),
       };
     }
+    
+    // Get preference (may be null if not submitted yet)
+    const preference = await service.getPreference(bookingId, user.id);
 
-    // Get reschedule options for context
-    const optionsService = new RescheduleOptionsService(pool);
-    const options = await optionsService.getOptionsByBooking(bookingId);
-
+    // Return 200 even if preference is null (user hasn't submitted yet)
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        preference,
+        preference: preference || null,
         options,
       }),
     };
