@@ -68,10 +68,63 @@ export async function requireAuth(
 
     let user;
     
-    // Skip database lookup for mock auth
+    // For mock auth, try to find or create user in database
     if (process.env.MOCK_AUTH === 'true') {
-      user = cognitoUser;
-      logger.info('Using mock auth - skipping database lookup', { email: cognitoUser.email, path: event.path });
+      try {
+        const pool = getDbPool();
+        // Try to find user by email (since we don't have cognito_user_id with mock auth)
+        const dbUser = await pool.query(
+          'SELECT id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at FROM users WHERE email = $1',
+          [cognitoUser.email]
+        );
+
+        if (dbUser.rows.length > 0) {
+          // User exists - use database ID
+          const userRow = dbUser.rows[0];
+          user = {
+            id: userRow.id,
+            email: userRow.email,
+            firstName: userRow.first_name,
+            lastName: userRow.last_name,
+            phoneNumber: userRow.phone_number,
+            role: userRow.role,
+            trainingLevel: userRow.training_level,
+            createdAt: userRow.created_at,
+            updatedAt: userRow.updated_at,
+          };
+          logger.info('Found user in database for mock auth', { userId: user.id, email: user.email, path: event.path });
+        } else {
+          // User doesn't exist - create one
+          const insertResult = await pool.query(
+            `INSERT INTO users (email, first_name, last_name, role, training_level, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+             RETURNING id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at`,
+            [cognitoUser.email, cognitoUser.firstName || 'User', cognitoUser.lastName || 'Name', cognitoUser.role, cognitoUser.trainingLevel || null]
+          );
+          
+          const userRow = insertResult.rows[0];
+          user = {
+            id: userRow.id,
+            email: userRow.email,
+            firstName: userRow.first_name,
+            lastName: userRow.last_name,
+            phoneNumber: userRow.phone_number,
+            role: userRow.role,
+            trainingLevel: userRow.training_level,
+            createdAt: userRow.created_at,
+            updatedAt: userRow.updated_at,
+          };
+          logger.info('Created user in database for mock auth', { userId: user.id, email: user.email, path: event.path });
+        }
+      } catch (dbError: any) {
+        // If database fails, fall back to Cognito user info
+        logger.warn('Database lookup/create failed for mock auth, using Cognito user info', { 
+          error: dbError.message,
+          email: cognitoUser.email,
+          path: event.path
+        });
+        user = cognitoUser;
+      }
     } else {
       // Look up database user ID using Cognito user ID
       const pool = getDbPool();
