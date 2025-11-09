@@ -66,32 +66,39 @@ export async function requireAuth(
     // Verify token with Cognito
     const cognitoUser = await AuthService.verifyToken(token);
 
-    // Look up database user ID using Cognito user ID
-    const pool = getDbPool();
-    const dbUser = await pool.query(
-      'SELECT id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at FROM users WHERE cognito_user_id = $1',
-      [cognitoUser.id]
-    );
-
     let user;
-    if (dbUser.rows.length === 0) {
-      // User exists in Cognito but not in database - use Cognito user info
-      logger.warn('User found in Cognito but not in database', { cognitoUserId: cognitoUser.id, path: event.path });
+    
+    // Skip database lookup for mock auth
+    if (process.env.MOCK_AUTH === 'true') {
       user = cognitoUser;
+      logger.info('Using mock auth - skipping database lookup', { email: cognitoUser.email, path: event.path });
     } else {
-      // Return user with database ID
-      const userRow = dbUser.rows[0];
-      user = {
-        id: userRow.id, // Use database ID, not Cognito ID
-        email: userRow.email,
-        firstName: userRow.first_name,
-        lastName: userRow.last_name,
-        phoneNumber: userRow.phone_number,
-        role: userRow.role,
-        trainingLevel: userRow.training_level,
-        createdAt: userRow.created_at,
-        updatedAt: userRow.updated_at,
-      };
+      // Look up database user ID using Cognito user ID
+      const pool = getDbPool();
+      const dbUser = await pool.query(
+        'SELECT id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at FROM users WHERE cognito_user_id = $1',
+        [cognitoUser.id]
+      );
+
+      if (dbUser.rows.length === 0) {
+        // User exists in Cognito but not in database - use Cognito user info
+        logger.warn('User found in Cognito but not in database', { cognitoUserId: cognitoUser.id, path: event.path });
+        user = cognitoUser;
+      } else {
+        // Return user with database ID
+        const userRow = dbUser.rows[0];
+        user = {
+          id: userRow.id, // Use database ID, not Cognito ID
+          email: userRow.email,
+          firstName: userRow.first_name,
+          lastName: userRow.last_name,
+          phoneNumber: userRow.phone_number,
+          role: userRow.role,
+          trainingLevel: userRow.training_level,
+          createdAt: userRow.created_at,
+          updatedAt: userRow.updated_at,
+        };
+      }
     }
 
     logger.info('User authenticated', {
