@@ -109,6 +109,20 @@ app.get('/test-health', async (req, res) => {
 });
 
 // Test route: Root path through auth handler (simulates API Gateway behavior)
+// Temporary endpoint to list users (for testing)
+app.get('/api/users/list', async (_req, res) => {
+  try {
+    const pool = getDbPool();
+    const result = await pool.query(
+      'SELECT id, email, role, first_name, last_name FROM users ORDER BY created_at DESC LIMIT 50'
+    );
+    res.json({ users: result.rows });
+  } catch (error) {
+    logger.error('List users error:', error);
+    res.status(500).json({ error: 'Failed to list users', message: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
 app.get('/test-root', async (req, res) => {
   try {
     const event = {
