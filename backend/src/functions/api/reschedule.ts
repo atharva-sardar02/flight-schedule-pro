@@ -589,7 +589,84 @@ async function handleConfirmReschedule(
         };
       }
 
-      logInfo('Availability check passed', {
+      // CHECK FOR BLOCKED TIME SLOTS (Availability Overrides)
+      // Check if student has blocked this time
+      // Handles both specific time blocks and whole-day blocks (NULL start/end times)
+      const studentBlockedCheck = await pool.query(
+        `SELECT id, override_date, start_time, end_time, is_blocked, reason
+         FROM availability_overrides
+         WHERE user_id = $1 
+           AND override_date = $2
+           AND is_blocked = true
+           AND (
+             (start_time IS NULL AND end_time IS NULL) OR  -- Whole day blocked
+             (start_time IS NULL AND end_time >= $3) OR    -- Blocked until end_time
+             (end_time IS NULL AND start_time <= $3) OR    -- Blocked from start_time
+             (start_time <= $3 AND end_time >= $3)         -- Blocked for specific time range
+           )`,
+        [booking.student_id, dateStr, timeStr]
+      );
+
+      if (studentBlockedCheck.rows.length > 0) {
+        const blockedOverride = studentBlockedCheck.rows[0];
+        logInfo('Blocked time detected at confirmation', {
+          bookingId,
+          userId: booking.student_id,
+          reason: blockedOverride.reason,
+        });
+
+        return {
+          statusCode: 409,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Time slot is blocked',
+            reason: `Student has blocked this time slot. ${blockedOverride.reason ? `Reason: ${blockedOverride.reason}.` : ''}`,
+            requiresNewOptions: true,
+            newOptionsGenerated: false,
+            message: 'This time slot has been blocked. Please generate new reschedule options.',
+          }),
+        };
+      }
+
+      // Check if instructor has blocked this time
+      // Handles both specific time blocks and whole-day blocks (NULL start/end times)
+      const instructorBlockedCheck = await pool.query(
+        `SELECT id, override_date, start_time, end_time, is_blocked, reason
+         FROM availability_overrides
+         WHERE user_id = $1 
+           AND override_date = $2
+           AND is_blocked = true
+           AND (
+             (start_time IS NULL AND end_time IS NULL) OR  -- Whole day blocked
+             (start_time IS NULL AND end_time >= $3) OR    -- Blocked until end_time
+             (end_time IS NULL AND start_time <= $3) OR    -- Blocked from start_time
+             (start_time <= $3 AND end_time >= $3)         -- Blocked for specific time range
+           )`,
+        [booking.instructor_id, dateStr, timeStr]
+      );
+
+      if (instructorBlockedCheck.rows.length > 0) {
+        const blockedOverride = instructorBlockedCheck.rows[0];
+        logInfo('Blocked time detected at confirmation', {
+          bookingId,
+          userId: booking.instructor_id,
+          reason: blockedOverride.reason,
+        });
+
+        return {
+          statusCode: 409,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Time slot is blocked',
+            reason: `Instructor has blocked this time slot. ${blockedOverride.reason ? `Reason: ${blockedOverride.reason}.` : ''}`,
+            requiresNewOptions: true,
+            newOptionsGenerated: false,
+            message: 'This time slot has been blocked. Please generate new reschedule options.',
+          }),
+        };
+      }
+
+      logInfo('All availability checks passed (calendar, conflicts, and blocked slots)', {
         bookingId,
         newTime: newScheduledTime.toISOString(),
       });

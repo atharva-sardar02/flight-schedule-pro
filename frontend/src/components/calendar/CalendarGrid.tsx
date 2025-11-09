@@ -4,9 +4,11 @@
  */
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AvailabilitySlot } from '../../types/availability';
 import { Booking } from '../../types/booking';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { format } from 'date-fns';
 
 interface CalendarGridProps {
   slots: AvailabilitySlot[];
@@ -16,6 +18,7 @@ interface CalendarGridProps {
 }
 
 export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, endDate, bookings = [] }) => {
+  const navigate = useNavigate();
   // Generate all dates in range
   const generateDateRange = (): Date[] => {
     const dates: Date[] = [];
@@ -30,15 +33,27 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, en
   const dates = generateDateRange();
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  // Helper to format date in local timezone (YYYY-MM-DD)
+  const formatDateLocal = (date: Date | string): string => {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Group slots by date
   const slotsByDate = slots.reduce((acc, slot) => {
-    const dateKey = new Date(slot.date).toISOString().split('T')[0];
+    const dateKey = formatDateLocal(slot.date);
     if (!acc[dateKey]) acc[dateKey] = [];
     acc[dateKey].push(slot);
     return acc;
   }, {} as Record<string, AvailabilitySlot[]>);
 
   // Convert bookings to blocked slots and group by date
+  // Store booking ID mapping for navigation
+  const bookingIdBySlotKey: Record<string, string> = {};
+  
   const bookingSlotsByDate = bookings.reduce((acc, booking) => {
     try {
       const bookingDate = new Date(booking.scheduledDatetime);
@@ -46,7 +61,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, en
         console.warn('Invalid booking date:', booking.scheduledDatetime, booking.id);
         return acc;
       }
-      const dateKey = bookingDate.toISOString().split('T')[0];
+      // Use local date formatting to avoid timezone issues
+      const dateKey = formatDateLocal(bookingDate);
       
       // Calculate end time from duration
       const endTime = new Date(bookingDate);
@@ -59,15 +75,22 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, en
         return `${hours}:${minutes}`;
       };
       
+      const startTimeStr = formatTime(bookingDate);
+      const endTimeStr = formatTime(endTime);
+      
       // Create a blocked slot for this booking
       const bookingSlot: AvailabilitySlot = {
         date: dateKey,
-        startTime: formatTime(bookingDate),
-        endTime: formatTime(endTime),
+        startTime: startTimeStr,
+        endTime: endTimeStr,
         isAvailable: false,
         source: 'override', // Use override source to indicate it's from a booking
         reason: `${booking.departureAirport} → ${booking.arrivalAirport}`,
       };
+      
+      // Store booking ID for this slot (use date + time as key)
+      const slotKey = `${dateKey}-${startTimeStr}-${endTimeStr}`;
+      bookingIdBySlotKey[slotKey] = booking.id;
       
       if (!acc[dateKey]) acc[dateKey] = [];
       acc[dateKey].push(bookingSlot);
@@ -95,7 +118,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, en
   });
 
   const formatDate = (date: Date) => {
-    return date.toISOString().split('T')[0];
+    return formatDateLocal(date);
   };
 
   const isToday = (date: Date) => {
@@ -138,10 +161,18 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, en
     weeks.push(currentWeek);
   }
 
+  // Get month name for display
+  const currentMonth = format(startDate, 'MMMM yyyy');
+  
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Availability Calendar</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Availability Calendar</CardTitle>
+          <div className="text-lg font-semibold text-gray-700">
+            {currentMonth}
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-7 gap-2">
@@ -168,35 +199,69 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ slots, startDate, en
                     min-h-[100px] p-2 border rounded-lg
                     ${!isInRange ? 'bg-gray-50 text-gray-400' : ''}
                     ${isToday(date) ? 'ring-2 ring-blue-500' : ''}
-                    ${isInRange && availableSlots.length > 0 ? 'bg-green-50' : ''}
+                    ${isInRange && availableSlots.length > 0 && blockedSlots.length === 0 ? 'bg-green-50' : ''}
                     ${isInRange && availableSlots.length === 0 && daySlots.length === 0 ? 'bg-gray-50' : ''}
-                    ${isInRange && blockedSlots.length > 0 && availableSlots.length === 0 ? 'bg-red-50' : ''}
+                    ${isInRange && blockedSlots.length > 0 ? 'bg-red-50 border-red-200' : ''}
+                    ${isInRange && availableSlots.length > 0 && blockedSlots.length > 0 ? 'bg-yellow-50 border-yellow-200' : ''}
                   `}
                 >
                   <div className="text-sm font-semibold mb-2">{date.getDate()}</div>
                   
-                  {isInRange && daySlots.length > 0 && (
+                  {/* Show slots if there are any, prioritizing blocked slots */}
+                  {isInRange && (daySlots.length > 0 || blockedSlots.length > 0) && (
                     <div className="space-y-1">
-                      {daySlots.slice(0, 3).map((slot, idx) => (
-                        <div
-                          key={idx}
-                          className={`text-xs p-1 rounded ${
-                            slot.isAvailable ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          <div className="font-mono text-[10px]">
-                            {slot.startTime} - {slot.endTime}
-                          </div>
-                          {slot.reason && (
-                            <div className="truncate font-semibold" title={slot.reason}>
-                              {slot.reason}
+                      {/* Show blocked slots first, then available slots */}
+                      {[...blockedSlots, ...availableSlots].slice(0, 3).map((slot, idx) => {
+                        // Check if this is a booking slot (blocked)
+                        const slotKey = `${dateKey}-${slot.startTime}-${slot.endTime}`;
+                        const bookingId = bookingIdBySlotKey[slotKey];
+                        const isBooking = !slot.isAvailable && bookingId;
+                        
+                        const slotContent = (
+                          <>
+                            <div className="font-mono text-[10px]">
+                              {slot.startTime} - {slot.endTime}
                             </div>
-                          )}
-                        </div>
-                      ))}
-                      {daySlots.length > 3 && (
+                            {slot.reason && (
+                              <div className="truncate font-semibold" title={slot.reason}>
+                                {slot.reason}
+                              </div>
+                            )}
+                          </>
+                        );
+                        
+                        if (isBooking) {
+                          return (
+                            <div
+                              key={idx}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/bookings/${bookingId}`);
+                              }}
+                              className={`text-xs p-1 rounded cursor-pointer transition-all hover:shadow-md hover:scale-105 ${
+                                slot.isAvailable ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-red-100 text-red-800 hover:bg-red-200'
+                              }`}
+                              title="Click to view booking details"
+                            >
+                              {slotContent}
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                          <div
+                            key={idx}
+                            className={`text-xs p-1 rounded ${
+                              slot.isAvailable ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {slotContent}
+                          </div>
+                        );
+                      })}
+                      {(blockedSlots.length + availableSlots.length) > 3 && (
                         <div className="text-xs text-gray-500">
-                          +{daySlots.length - 3} more
+                          +{(blockedSlots.length + availableSlots.length) - 3} more
                         </div>
                       )}
                     </div>

@@ -148,6 +148,59 @@ export class BookingService {
         );
       }
 
+      // CHECK FOR BLOCKED TIME SLOTS (Availability Overrides)
+      // Check if student has blocked this time
+      // Handles both specific time blocks and whole-day blocks (NULL start/end times)
+      const studentOverrides = await client.query(
+        `SELECT id, override_date, start_time, end_time, is_blocked, reason
+         FROM availability_overrides
+         WHERE user_id = $1 
+           AND override_date = $2
+           AND is_blocked = true
+           AND (
+             (start_time IS NULL AND end_time IS NULL) OR  -- Whole day blocked
+             (start_time IS NULL AND end_time >= $3) OR    -- Blocked until end_time
+             (end_time IS NULL AND start_time <= $3) OR    -- Blocked from start_time
+             (start_time <= $3 AND end_time >= $3)         -- Blocked for specific time range
+           )`,
+        [data.studentId, dateStr, timeStr]
+      );
+
+      if (studentOverrides.rows.length > 0) {
+        const blockedOverride = studentOverrides.rows[0];
+        throw new Error(
+          `Student has blocked this time slot. ` +
+          (blockedOverride.reason ? `Reason: ${blockedOverride.reason}. ` : '') +
+          `Please choose a different time.`
+        );
+      }
+
+      // Check if instructor has blocked this time
+      // Handles both specific time blocks and whole-day blocks (NULL start/end times)
+      const instructorOverrides = await client.query(
+        `SELECT id, override_date, start_time, end_time, is_blocked, reason
+         FROM availability_overrides
+         WHERE user_id = $1 
+           AND override_date = $2
+           AND is_blocked = true
+           AND (
+             (start_time IS NULL AND end_time IS NULL) OR  -- Whole day blocked
+             (start_time IS NULL AND end_time >= $3) OR    -- Blocked until end_time
+             (end_time IS NULL AND start_time <= $3) OR    -- Blocked from start_time
+             (start_time <= $3 AND end_time >= $3)         -- Blocked for specific time range
+           )`,
+        [data.instructorId, dateStr, timeStr]
+      );
+
+      if (instructorOverrides.rows.length > 0) {
+        const blockedOverride = instructorOverrides.rows[0];
+        throw new Error(
+          `Instructor has blocked this time slot. ` +
+          (blockedOverride.reason ? `Reason: ${blockedOverride.reason}. ` : '') +
+          `Please choose a different time.`
+        );
+      }
+
       // Perform initial weather validation
       const path = calculateFlightPath(
         {

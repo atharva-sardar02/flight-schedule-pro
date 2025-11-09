@@ -13,6 +13,7 @@ import { UserRole, User } from '../../types/user';
 import { useAuth } from '../../hooks/useAuth';
 import { getUserFriendlyError, showErrorNotification } from '../../utils/errorHandling';
 import { EnhancedAlert, detectErrorType, isConflictError } from '@/components/ui/enhanced-alert';
+import { useToast } from '@/hooks/use-toast';
 
 // Common US airports for demo
 const AIRPORTS = [

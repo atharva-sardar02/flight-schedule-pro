@@ -504,9 +504,10 @@ export class RescheduleEngine {
         );
 
         // Slot is valid only if:
-        // 1. Student is available in their calendar
-        // 2. Instructor is available in their calendar
+        // 1. Student is available in their calendar (and not blocked)
+        // 2. Instructor is available in their calendar (and not blocked)
         // 3. No existing bookings conflict with this time
+        // Note: checkUserAvailability already checks for blocked overrides
         const availabilityValid = studentAvailable && instructorAvailable && !hasBookingConflict;
 
         if (!availabilityValid) {
@@ -798,14 +799,43 @@ Please select the top 3 best options for rescheduling, considering proximity to 
   }
 
   /**
-   * Check if a user is available at a specific time (calendar check)
+   * Check if a user is available at a specific time
+   * Validates: calendar availability AND no blocked overrides
    */
   private async checkUserAvailability(userId: string, datetime: Date): Promise<boolean> {
     try {
       const dateStr = format(datetime, 'yyyy-MM-dd');
       const timeStr = format(datetime, 'HH:mm');
 
-      // Get availability for that day
+      // FIRST: Check for blocked overrides (takes precedence)
+      // Handles both specific time blocks and whole-day blocks (NULL start/end times)
+      const blockedCheck = await this.pool.query(
+        `SELECT id, override_date, start_time, end_time, is_blocked, reason
+         FROM availability_overrides
+         WHERE user_id = $1 
+           AND override_date = $2
+           AND is_blocked = true
+           AND (
+             (start_time IS NULL AND end_time IS NULL) OR  -- Whole day blocked
+             (start_time IS NULL AND end_time >= $3) OR    -- Blocked until end_time
+             (end_time IS NULL AND start_time <= $3) OR    -- Blocked from start_time
+             (start_time <= $3 AND end_time >= $3)         -- Blocked for specific time range
+           )`,
+        [userId, dateStr, timeStr]
+      );
+
+      if (blockedCheck.rows.length > 0) {
+        logInfo('User has blocked this time slot', {
+          userId,
+          datetime: datetime.toISOString(),
+          dateStr,
+          timeStr,
+          reason: blockedCheck.rows[0].reason,
+        });
+        return false; // Blocked override takes precedence
+      }
+
+      // SECOND: Check calendar availability
       const availability = await this.availabilityService.getAvailability({
         userId,
         startDate: dateStr,
@@ -816,7 +846,7 @@ Please select the top 3 best options for rescheduling, considering proximity to 
       const isAvailable = availability.slots.some((slot) => {
         const slotDate = format(new Date(slot.date), 'yyyy-MM-dd');
         if (slotDate !== dateStr) return false;
-        if (!slot.isAvailable) return false;
+        if (!slot.isAvailable) return false; // This catches blocked slots from overrides
 
         // Check if time falls within slot
         const slotStart = slot.startTime;
