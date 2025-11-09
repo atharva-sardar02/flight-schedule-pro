@@ -7,6 +7,7 @@
 import { Pool } from 'pg';
 import { StateGraph, END, START } from '@langchain/langgraph';
 import { ChatOpenAI } from '@langchain/openai';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { addDays, addHours, isWithinInterval, parse, format } from 'date-fns';
 import { WeatherValidator } from './weatherValidator';
 import { WeatherService } from '../../services/weatherService';
@@ -174,46 +175,101 @@ export class RescheduleEngine {
   }
 
   /**
-   * Step 1: Find candidate time slots within 7-day window
+   * Step 1: Find candidate time slots within 7-day window around original booking date
    */
   private async findCandidateSlots(state: RescheduleState): Promise<Partial<RescheduleState>> {
     try {
-      logInfo('Finding candidate slots', { bookingId: state.bookingId });
+      logInfo('Finding candidate slots', { 
+        bookingId: state.bookingId,
+        originalTime: state.originalTime.toISOString()
+      });
 
       const candidates: CandidateSlot[] = [];
-      const startDate = new Date();
-      const endDate = addDays(startDate, 7);
+      const now = new Date();
+      
+      // Start from original booking date, not today
+      // Look 7 days before and 7 days after the original date (14-day window total)
+      // But prioritize dates around the original date
+      const originalDate = new Date(state.originalTime);
+      const startDate = addDays(originalDate, -7); // 7 days before original
+      const endDate = addDays(originalDate, 7); // 7 days after original
+      
+      // Ensure we don't go into the past (can't reschedule to past dates)
+      const actualStartDate = startDate < now ? now : startDate;
+
+      logInfo('Date range for candidate slots', {
+        originalDate: originalDate.toISOString(),
+        startDate: actualStartDate.toISOString(),
+        endDate: endDate.toISOString(),
+      });
 
       // Generate time slots (every 2 hours during typical flying hours: 8AM - 6PM)
-      let currentDate = new Date(startDate);
+      let currentDate = new Date(actualStartDate);
       while (currentDate <= endDate) {
         for (let hour = 8; hour <= 18; hour += 2) {
           const slotTime = new Date(currentDate);
           slotTime.setHours(hour, 0, 0, 0);
 
           // Skip if in the past
-          if (slotTime < new Date()) {
+          if (slotTime < now) {
             continue;
           }
 
           // Calculate proximity score (closer to original time = better)
+          // Higher score for slots closer to original booking time
           const hoursDiff = Math.abs(
             (slotTime.getTime() - state.originalTime.getTime()) / (1000 * 60 * 60)
           );
-          const proximityScore = Math.max(0, 100 - hoursDiff);
+          
+          // Prioritize slots around the original date:
+          // - Same day as original: 100 points
+          // - 1 day difference: 80 points
+          // - 2 days difference: 60 points
+          // - 3+ days difference: 40 points
+          // Then subtract based on hour difference within the day
+          let proximityScore = 100;
+          const daysDiff = Math.abs(
+            Math.floor((slotTime.getTime() - originalDate.getTime()) / (1000 * 60 * 60 * 24))
+          );
+          
+          if (daysDiff === 0) {
+            // Same day - prioritize same hour, then nearby hours
+            const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
+            proximityScore = 100 - (hourDiff * 5); // -5 points per hour difference
+          } else if (daysDiff === 1) {
+            // 1 day difference
+            const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
+            proximityScore = 80 - (hourDiff * 3);
+          } else if (daysDiff === 2) {
+            // 2 days difference
+            const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
+            proximityScore = 60 - (hourDiff * 2);
+          } else {
+            // 3+ days difference
+            const hourDiff = Math.abs(slotTime.getHours() - originalDate.getHours());
+            proximityScore = Math.max(20, 40 - (daysDiff * 5) - (hourDiff * 1));
+          }
+          
+          // Ensure score is positive
+          proximityScore = Math.max(0, proximityScore);
 
           candidates.push({
             datetime: slotTime,
             score: proximityScore,
-            reason: 'Generated slot',
+            reason: `Generated slot (${daysDiff} days from original, ${Math.abs(slotTime.getHours() - originalDate.getHours())} hours difference)`,
           });
         }
         currentDate = addDays(currentDate, 1);
       }
 
+      // Sort by proximity score (highest first) to prioritize slots closer to original date
+      candidates.sort((a, b) => b.score - a.score);
+
       logInfo('Candidate slots found', {
         bookingId: state.bookingId,
         count: candidates.length,
+        topScore: candidates[0]?.score,
+        topDate: candidates[0]?.datetime.toISOString(),
       });
 
       return { candidateSlots: candidates };
@@ -336,11 +392,11 @@ export class RescheduleEngine {
   }
 
   /**
-   * Step 4: Rank and select top 3 options
+   * Step 4: Rank and select top 3 options using AI
    */
   private async rankAndSelectTop3(state: RescheduleState): Promise<Partial<RescheduleState>> {
     try {
-      logInfo('Ranking and selecting top 3 options', { bookingId: state.bookingId });
+      logInfo('Ranking and selecting top 3 options using AI', { bookingId: state.bookingId });
 
       if (state.validatedSlots.length === 0) {
         logWarn('No valid slots found, unable to generate options', {
@@ -348,6 +404,195 @@ export class RescheduleEngine {
         });
         return { finalOptions: [], error: 'No valid time slots available in 7-day window' };
       }
+
+      // Prepare candidate slots data for LLM
+      const candidateData = state.validatedSlots.slice(0, 20).map((slot, index) => {
+        const weatherInfo = Array.isArray(slot.weatherData) && slot.weatherData.length > 0
+          ? slot.weatherData.map((w: any) => ({
+              location: w.location || 'Unknown',
+              visibility: w.visibility || 'N/A',
+              windSpeed: w.windSpeed || 'N/A',
+              conditions: w.conditions || 'N/A',
+            }))
+          : [{ location: 'Weather data unavailable' }];
+
+        return {
+          index: index + 1,
+          datetime: format(slot.datetime, 'EEEE, MMMM d, yyyy h:mm a'),
+          isoDateTime: slot.datetime.toISOString(),
+          proximityScore: slot.overallScore,
+          weatherConfidence: slot.weatherConfidence,
+          weatherInfo: weatherInfo,
+          hoursFromOriginal: Math.abs(
+            (slot.datetime.getTime() - state.originalTime.getTime()) / (1000 * 60 * 60)
+          ).toFixed(1),
+        };
+      });
+
+      // Create AI prompt
+      const systemPrompt = `You are an intelligent flight scheduling assistant. Your task is to analyze candidate time slots for rescheduling a flight lesson and select the top 3 best options.
+
+Consider these factors in order of importance:
+1. **Proximity to original booking time** - Closer to original time is better
+2. **Weather conditions** - Better weather confidence means safer flying conditions
+3. **Practical timing** - Consider typical flight training hours and user convenience
+4. **Overall quality** - Balance all factors to provide the best options
+
+Return your response as a JSON array with exactly 3 objects, each containing:
+- "rank": 1, 2, or 3 (1 is best)
+- "index": The candidate slot index number (1-based)
+- "reasoning": Brief explanation of why this option was selected
+
+Example response format:
+[
+  {"rank": 1, "index": 5, "reasoning": "Closest to original time with excellent weather"},
+  {"rank": 2, "index": 12, "reasoning": "Good weather, only 1 day later"},
+  {"rank": 3, "index": 8, "reasoning": "Acceptable weather, convenient time"}
+]`;
+
+      const userPrompt = `Original booking was scheduled for: ${format(state.originalTime, 'EEEE, MMMM d, yyyy h:mm a')}
+Training level: ${state.trainingLevel}
+Route: ${state.departureAirport} → ${state.arrivalAirport}
+
+Here are the candidate time slots (already validated for availability and weather):
+
+${JSON.stringify(candidateData, null, 2)}
+
+Please select the top 3 best options for rescheduling, considering proximity to the original time, weather conditions, and practical timing. Return only the JSON array with your selections.`;
+
+      logInfo('Sending prompt to LLM', {
+        bookingId: state.bookingId,
+        candidateCount: candidateData.length,
+      });
+
+      // Call LLM with timeout
+      let llmResponse: any;
+      try {
+        const messages = [
+          new SystemMessage(systemPrompt),
+          new HumanMessage(userPrompt),
+        ];
+
+        const response = await Promise.race([
+          this.llm.invoke(messages),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('LLM timeout after 15 seconds')), 15000)
+          ),
+        ]) as any;
+
+        llmResponse = response.content || response.text || '';
+        logInfo('LLM response received', { bookingId: state.bookingId, responseLength: llmResponse.length });
+      } catch (llmError: any) {
+        logWarn('LLM call failed, falling back to rule-based ranking', llmError, {
+          bookingId: state.bookingId,
+          error: llmError.message,
+        });
+        // Fall back to rule-based ranking
+        return this.rankAndSelectTop3RuleBased(state);
+      }
+
+      // Parse LLM response
+      let selectedIndices: number[] = [];
+      try {
+        // Extract JSON from response (handle markdown code blocks)
+        let jsonStr = llmResponse.trim();
+        if (jsonStr.includes('```json')) {
+          jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+        } else if (jsonStr.includes('```')) {
+          jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+        }
+
+        const selections = JSON.parse(jsonStr);
+        if (!Array.isArray(selections) || selections.length === 0) {
+          throw new Error('Invalid response format - not an array');
+        }
+
+        // Sort by rank and extract indices
+        selections.sort((a, b) => a.rank - b.rank);
+        selectedIndices = selections.slice(0, 3).map((s: any) => s.index - 1); // Convert to 0-based
+
+        logInfo('LLM selections parsed', {
+          bookingId: state.bookingId,
+          selections: selections.map((s: any) => ({
+            rank: s.rank,
+            index: s.index,
+            reasoning: s.reasoning,
+          })),
+        });
+      } catch (parseError: any) {
+        logWarn('Failed to parse LLM response, falling back to rule-based', parseError, {
+          bookingId: state.bookingId,
+          response: llmResponse.substring(0, 200),
+        });
+        // Fall back to rule-based ranking
+        return this.rankAndSelectTop3RuleBased(state);
+      }
+
+      // Get selected slots
+      const selectedSlots = selectedIndices
+        .filter((idx) => idx >= 0 && idx < state.validatedSlots.length)
+        .map((idx) => state.validatedSlots[idx]);
+
+      // If we don't have 3 valid selections, fill with rule-based fallback
+      if (selectedSlots.length < 3) {
+        logWarn('LLM selected fewer than 3 valid slots, filling with rule-based', {
+          bookingId: state.bookingId,
+          selectedCount: selectedSlots.length,
+        });
+        const fallback = await this.rankAndSelectTop3RuleBased(state);
+        const fallbackSlots = fallback.finalOptions || [];
+        
+        // Combine LLM selections with fallback, avoiding duplicates
+        const selectedTimes = new Set(selectedSlots.map(s => s.datetime.getTime()));
+        for (const fallbackSlot of fallbackSlots) {
+          if (selectedSlots.length >= 3) break;
+          if (!selectedTimes.has(fallbackSlot.datetime.getTime())) {
+            const originalSlot = state.validatedSlots.find(
+              s => s.datetime.getTime() === fallbackSlot.datetime.getTime()
+            );
+            if (originalSlot) {
+              selectedSlots.push(originalSlot);
+              selectedTimes.add(originalSlot.datetime.getTime());
+            }
+          }
+        }
+      }
+
+      // Convert to final options format
+      const finalOptions: RescheduleOption[] = selectedSlots.slice(0, 3).map((slot) => {
+        const weatherConf = slot.weatherConfidence || 70;
+        const overallScr = slot.overallScore || 50;
+        const confidenceScore = Math.min(1.0, Math.max(0.0, (overallScr + weatherConf * 10) / 110));
+        
+        return {
+          datetime: slot.datetime,
+          weatherForecast: slot.weatherData || [],
+          confidenceScore,
+        };
+      });
+
+      logInfo('Top 3 options selected by AI', {
+        bookingId: state.bookingId,
+        options: finalOptions.map((opt) => ({
+          datetime: opt.datetime.toISOString(),
+          confidence: opt.confidenceScore.toFixed(2),
+        })),
+      });
+
+      return { finalOptions };
+    } catch (error: any) {
+      logError('Failed to rank options with AI', error);
+      // Fall back to rule-based ranking
+      return this.rankAndSelectTop3RuleBased(state);
+    }
+  }
+
+  /**
+   * Fallback: Rule-based ranking (used if LLM fails)
+   */
+  private rankAndSelectTop3RuleBased(state: RescheduleState): Partial<RescheduleState> {
+    try {
+      logInfo('Using rule-based ranking (fallback)', { bookingId: state.bookingId });
 
       // Sort by overall score (weather confidence + proximity)
       const sorted = state.validatedSlots.sort((a, b) => {
@@ -359,10 +604,9 @@ export class RescheduleEngine {
       // Take top 3
       const top3 = sorted.slice(0, 3);
 
-      const finalOptions: RescheduleOption[] = top3.map((slot, index) => {
-        // Calculate confidence score (0-1), handling NaN cases
-        const weatherConf = slot.weatherConfidence || 70; // Default if undefined
-        const overallScr = slot.overallScore || 50; // Default if undefined
+      const finalOptions: RescheduleOption[] = top3.map((slot) => {
+        const weatherConf = slot.weatherConfidence || 70;
+        const overallScr = slot.overallScore || 50;
         const confidenceScore = Math.min(1.0, Math.max(0.0, (overallScr + weatherConf * 10) / 110));
         
         return {
@@ -372,18 +616,10 @@ export class RescheduleEngine {
         };
       });
 
-      logInfo('Top 3 options selected', {
-        bookingId: state.bookingId,
-        options: finalOptions.map((opt) => ({
-          datetime: opt.datetime.toISOString(),
-          confidence: opt.confidenceScore.toFixed(2),
-        })),
-      });
-
       return { finalOptions };
     } catch (error: any) {
-      logError('Failed to rank options', error);
-      return { error: error.message };
+      logError('Failed to rank options (rule-based fallback)', error);
+      return { finalOptions: [], error: error.message };
     }
   }
 
