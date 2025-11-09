@@ -319,12 +319,45 @@ export class AvailabilityService {
     // Get overrides
     const overrides = await this.getAvailabilityOverrides(userId, startDate, endDate);
 
+    // Parse dates as local dates to avoid timezone shifts
+    // If startDate/endDate are strings in YYYY-MM-DD format, parse them as local dates
+    let startDateLocal: Date;
+    let endDateLocal: Date;
+    
+    if (typeof startDate === 'string') {
+      const startMatch = startDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (startMatch) {
+        const year = parseInt(startMatch[1], 10);
+        const month = parseInt(startMatch[2], 10) - 1; // Month is 0-indexed
+        const day = parseInt(startMatch[3], 10);
+        startDateLocal = new Date(year, month, day); // Local date, not UTC
+      } else {
+        startDateLocal = new Date(startDate);
+      }
+    } else {
+      startDateLocal = startDate;
+    }
+    
+    if (typeof endDate === 'string') {
+      const endMatch = endDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (endMatch) {
+        const year = parseInt(endMatch[1], 10);
+        const month = parseInt(endMatch[2], 10) - 1; // Month is 0-indexed
+        const day = parseInt(endMatch[3], 10);
+        endDateLocal = new Date(year, month, day); // Local date, not UTC
+      } else {
+        endDateLocal = new Date(endDate);
+      }
+    } else {
+      endDateLocal = endDate;
+    }
+
     // Compute availability slots
     const slots = this.computeAvailabilitySlots(
       recurringPatterns,
       overrides,
-      new Date(startDate),
-      new Date(endDate)
+      startDateLocal,
+      endDateLocal
     );
 
     return {
@@ -369,20 +402,31 @@ export class AvailabilityService {
     });
 
     // Iterate through each date in the range
-    // Create dates in local timezone to avoid day-of-week shifts
-    const start = new Date(startDate);
-    start.setHours(12, 0, 0, 0); // Set to noon to avoid timezone edge cases
-    const end = new Date(endDate);
-    end.setHours(12, 0, 0, 0);
+    // startDate and endDate should already be local dates (parsed in getAvailability)
+    // Extract components and recreate as local dates to ensure correct day of week
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth();
+    const startDay = startDate.getDate();
     
-    const currentDate = new Date(start);
-    while (currentDate <= end) {
-      // Format date as YYYY-MM-DD in local timezone
+    const endYear = endDate.getFullYear();
+    const endMonth = endDate.getMonth();
+    const endDay = endDate.getDate();
+    
+    // Create fresh local Date objects to ensure correct day of week calculation
+    const startLocal = new Date(startYear, startMonth, startDay, 12, 0, 0, 0); // Noon to avoid edge cases
+    const endLocal = new Date(endYear, endMonth, endDay, 12, 0, 0, 0);
+    
+    const currentDate = new Date(startLocal);
+    while (currentDate <= endLocal) {
+      // Format date as YYYY-MM-DD using local date components
       const year = currentDate.getFullYear();
       const month = String(currentDate.getMonth() + 1).padStart(2, '0');
       const day = String(currentDate.getDate()).padStart(2, '0');
       const dateKey = `${year}-${month}-${day}`;
-      const dayOfWeek = currentDate.getDay(); // getDay() returns 0-6 (Sunday-Saturday) in local time
+      
+      // getDay() returns 0-6 (Sunday=0, Monday=1, ..., Saturday=6) in local timezone
+      // This should match our DayOfWeek enum values exactly
+      const dayOfWeek = currentDate.getDay();
 
       // Check for overrides first
       const dayOverrides = overrideMap.get(dateKey) || [];
