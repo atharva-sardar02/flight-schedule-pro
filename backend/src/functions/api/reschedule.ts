@@ -319,8 +319,10 @@ async function handleConfirmReschedule(
     // Get booking details
     const bookingResult = await pool.query(
       `SELECT b.*, 
-              s.email as student_email, s.name as student_name,
-              i.email as instructor_email, i.name as instructor_name
+              s.email as student_email, 
+              CONCAT(s.first_name, ' ', s.last_name) as student_name,
+              i.email as instructor_email,
+              CONCAT(i.first_name, ' ', i.last_name) as instructor_name
        FROM bookings b
        JOIN users s ON b.student_id = s.id
        JOIN users i ON b.instructor_id = i.id
@@ -362,28 +364,57 @@ async function handleConfirmReschedule(
       };
     }
 
-    // RE-VALIDATE WEATHER before confirmation
+    // RE-VALIDATE WEATHER before confirmation (with timeout and graceful degradation)
     logInfo('Re-validating weather before confirmation', {
       bookingId,
       newTime: selectedOption.suggestedDatetime,
     });
 
-    // Re-validate weather using booking airports
-    const weatherService = new WeatherService();
-    // Get weather for departure and arrival airports
-    const departureCoords = { latitude: booking.departure_latitude, longitude: booking.departure_longitude };
-    const arrivalCoords = { latitude: booking.arrival_latitude, longitude: booking.arrival_longitude };
-    const departureWeather = await weatherService.getWeather(departureCoords);
-    const arrivalWeather = await weatherService.getWeather(arrivalCoords);
+    let weatherValid = { isValid: true, reason: 'Weather check completed' };
     
-    // Simple validation - check if weather is acceptable
-    const weatherValid = {
-      isValid: departureWeather.visibility >= 3 && arrivalWeather.visibility >= 3,
-      reason: departureWeather.visibility < 3 ? 'Low visibility at departure' : 
-              arrivalWeather.visibility < 3 ? 'Low visibility at arrival' : 'Weather acceptable'
-    };
+    try {
+      // Set a timeout for weather check (5 seconds max)
+      const weatherCheckPromise = (async () => {
+        const weatherService = new WeatherService();
+        const departureCoords = { latitude: booking.departure_latitude, longitude: booking.departure_longitude };
+        const arrivalCoords = { latitude: booking.arrival_latitude, longitude: booking.arrival_longitude };
+        
+        // Get weather for both airports in parallel
+        const [departureWeather, arrivalWeather] = await Promise.all([
+          weatherService.getWeather(departureCoords),
+          weatherService.getWeather(arrivalCoords)
+        ]);
+        
+        // Simple validation - check if weather is acceptable
+        const isValid = departureWeather.visibility >= 3 && arrivalWeather.visibility >= 3;
+        return {
+          isValid,
+          reason: !isValid 
+            ? (departureWeather.visibility < 3 ? 'Low visibility at departure' : 'Low visibility at arrival')
+            : 'Weather acceptable'
+        };
+      })();
 
-    if (!weatherValid.isValid) {
+      // Race against timeout
+      const timeoutPromise = new Promise<{ isValid: boolean; reason: string }>((resolve) => {
+        setTimeout(() => {
+          logInfo('Weather check timeout - proceeding with confirmation', { bookingId });
+          resolve({ isValid: true, reason: 'Weather check timed out - proceeding' });
+        }, 5000); // 5 second timeout
+      });
+
+      weatherValid = await Promise.race([weatherCheckPromise, timeoutPromise]);
+    } catch (error: any) {
+      // If weather check fails, log but allow confirmation to proceed (graceful degradation)
+      logError('Weather re-validation error (proceeding with confirmation)', error, {
+        bookingId,
+        newTime: selectedOption.suggestedDatetime,
+      });
+      weatherValid = { isValid: true, reason: 'Weather check failed - proceeding with confirmation' };
+    }
+
+    // Only block if weather is explicitly invalid (not on timeout or error)
+    if (!weatherValid.isValid && weatherValid.reason !== 'Weather check timed out - proceeding' && weatherValid.reason !== 'Weather check failed - proceeding with confirmation') {
       logInfo('Weather re-validation failed - option no longer suitable', {
         bookingId,
         newTime: selectedOption.suggestedDatetime,
