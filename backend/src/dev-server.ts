@@ -207,11 +207,14 @@ app.post('/api/users/sync/:email', async (req, res) => {
 });
 
 // Temporary endpoint to list users (for testing)
-app.get('/api/users/list', async (_req, res) => {
+app.get('/api/users/list', async (req, res) => {
   try {
     const pool = getDbPool();
-    const result = await pool.query(
-      `SELECT 
+    const role = req.query.role as string | undefined;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    let query = `SELECT 
         id, 
         email, 
         role, 
@@ -222,10 +225,22 @@ app.get('/api/users/list', async (_req, res) => {
         training_level,
         created_at,
         updated_at
-      FROM users 
-      ORDER BY created_at DESC 
-      LIMIT 50`
-    );
+      FROM users`;
+    
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (role) {
+      query += ` WHERE role = $${paramIndex}`;
+      params.push(role.toUpperCase());
+      paramIndex++;
+    }
+
+    query += ` ORDER BY first_name, last_name ASC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+    
     res.json({ 
       users: result.rows,
       count: result.rows.length 

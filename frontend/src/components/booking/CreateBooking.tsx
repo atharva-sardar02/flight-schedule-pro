@@ -6,9 +6,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BookingService from '../../services/booking';
+import UserService from '../../services/user';
 import { CreateBookingData } from '../../types/booking';
 import { TrainingLevel } from '../../types/weather';
-import { UserRole } from '../../types/user';
+import { UserRole, User } from '../../types/user';
 import { useAuth } from '../../hooks/useAuth';
 import { getUserFriendlyError, showErrorNotification } from '../../utils/errorHandling';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -36,6 +37,8 @@ export default function CreateBooking() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [instructors, setInstructors] = useState<User[]>([]);
+  const [loadingInstructors, setLoadingInstructors] = useState(false);
 
   // Auto-populate studentId or instructorId based on user role
   useEffect(() => {
@@ -60,6 +63,29 @@ export default function CreateBooking() {
       }
     } else {
       console.log('User not available yet:', user);
+    }
+  }, [user]);
+
+  // Load instructors for dropdown (only for students)
+  useEffect(() => {
+    const loadInstructors = async () => {
+      const normalizedRole = user?.role?.toUpperCase();
+      if (normalizedRole === 'STUDENT' || user?.role === UserRole.STUDENT) {
+        setLoadingInstructors(true);
+        try {
+          const instructorList = await UserService.getInstructors();
+          setInstructors(instructorList);
+        } catch (err) {
+          console.error('Failed to load instructors:', err);
+          setError('Failed to load instructors. Please refresh the page.');
+        } finally {
+          setLoadingInstructors(false);
+        }
+      }
+    };
+
+    if (user) {
+      loadInstructors();
     }
   }, [user]);
 
@@ -210,41 +236,79 @@ export default function CreateBooking() {
         <div className="bg-white shadow-sm rounded-lg p-6 space-y-6">
           {/* Student & Instructor */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Student ID *
-              </label>
-              <input
-                type="text"
-                name="studentId"
-                required
-                value={formData.studentId || ''}
-                onChange={handleChange}
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Enter student UUID"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                UUID of the student (from users table)
-              </p>
-            </div>
+            {/* Student field - hidden for students, visible for instructors/admins */}
+            {user && (user.role === UserRole.INSTRUCTOR || user.role === UserRole.ADMIN) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Student *
+                </label>
+                <input
+                  type="text"
+                  name="studentId"
+                  required
+                  value={formData.studentId || ''}
+                  onChange={handleChange}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="Enter student UUID"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  UUID of the student
+                </p>
+              </div>
+            )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Instructor ID *
-              </label>
-              <input
-                type="text"
-                name="instructorId"
-                required
-                value={formData.instructorId || ''}
-                onChange={handleChange}
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Enter instructor UUID"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                UUID of the instructor (from users table)
-              </p>
-            </div>
+            {/* Instructor dropdown for students */}
+            {user && (user.role === UserRole.STUDENT) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Instructor *
+                </label>
+                <select
+                  name="instructorId"
+                  required
+                  value={formData.instructorId || ''}
+                  onChange={handleChange}
+                  disabled={loadingInstructors}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {loadingInstructors ? 'Loading instructors...' : 'Select an instructor...'}
+                  </option>
+                  {instructors.map((instructor) => (
+                    <option key={instructor.id} value={instructor.id}>
+                      {instructor.firstName} {instructor.lastName} ({instructor.email})
+                    </option>
+                  ))}
+                </select>
+                {loadingInstructors && (
+                  <p className="mt-1 text-xs text-gray-500">Loading instructors...</p>
+                )}
+                {!loadingInstructors && instructors.length === 0 && (
+                  <p className="mt-1 text-xs text-yellow-600">No instructors available</p>
+                )}
+              </div>
+            )}
+
+            {/* Instructor field for instructors/admins (manual input) */}
+            {user && (user.role === UserRole.INSTRUCTOR || user.role === UserRole.ADMIN) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Instructor ID *
+                </label>
+                <input
+                  type="text"
+                  name="instructorId"
+                  required
+                  value={formData.instructorId || ''}
+                  onChange={handleChange}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="Enter instructor UUID"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  UUID of the instructor
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Flight Details */}
