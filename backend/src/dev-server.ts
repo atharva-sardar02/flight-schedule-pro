@@ -628,10 +628,13 @@ app.get('/notifications/unread/count', requireAuth, async (req: any, res) => {
   try {
     logger.info('Notifications unread count endpoint hit', { userId: req.user?.id });
     const pool = getDbPool();
+    logger.info('Database pool obtained');
     const notifier = new InAppNotifier(pool);
+    logger.info('InAppNotifier created, calling getUnreadCount');
     const count = await notifier.getUnreadCount(req.user.id);
     logger.info('Unread count retrieved', { userId: req.user.id, count });
     res.json({ count });
+    logger.info('Response sent');
   } catch (error: any) {
     logger.error('Get unread count error:', error);
     res.status(500).json({ error: 'Failed to get unread count', message: error.message });
