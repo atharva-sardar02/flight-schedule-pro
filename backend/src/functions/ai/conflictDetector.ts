@@ -5,7 +5,8 @@
 
 import { Pool } from 'pg';
 import { WeatherValidator, WeatherValidationResult } from './weatherValidator';
-import { BookingStatus, TrainingLevel } from '../../types/booking';
+import { BookingStatus } from '../../types/booking';
+import { TrainingLevel } from '../../types/weather';
 import { logInfo, logWarn, logConflictDetected } from '../../utils/logger';
 
 export interface ConflictDetectionResult {

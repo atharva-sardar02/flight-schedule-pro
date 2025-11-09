@@ -1,9 +1,9 @@
 # Active Context
 
 ## Current Status
-**Phase:** AI & Frontend Development - AI Rescheduling Complete  
+**Phase:** Deployment & Testing - Staging Preparation  
 **Date:** November 2024  
-**Status:** PRs #1-9 Complete, Ready for PR #10 (Notification System)  
+**Status:** PRs #1-19 Complete, PR #20 In Progress (Staging Deployment)  
 
 ## What Just Happened
 - ✅ **PR #1 Completed:** Monorepo structure initialized with frontend (React + Vite + shadcn/ui) and backend (TypeScript + Express dev server)
@@ -19,22 +19,29 @@
 ## Current Work Focus
 
 ### Immediate Next Steps
-1. **PR #10: Notification System** - Email (SES) and in-app notifications for weather alerts and options
-2. **PR #11: Preference Ranking System** - Frontend UI for preference submission and deadline countdown
-3. **PR #12: Dashboard & UI Components** - Complete dashboard with weather alerts, flight status, and metrics
+1. **PR #20: Staging Deployment & Testing** - Deploy to AWS staging environment and test all features
+2. **Local Testing:** Test all application functions locally using AWS RDS database
+3. **EC2 Deployment:** Deploy backend to EC2 instance (simpler than Lambda packaging)
 
 ### What We're Building Right Now
-Ready to start PR #10: Notification System with email (AWS SES) and real-time in-app notifications.
+- ✅ **Simplified Deployment Architecture**: EC2 backend + S3 frontend + RDS database
+- ✅ **Deployment Documentation**: Created simple, straightforward deployment guide
+- ✅ **Deployment Scripts**: Frontend deployment scripts for Linux/Mac and Windows
+- ✅ **CORS Configuration**: Updated to support environment-based origins for S3 deployment
+- Ready for deployment: Simple 3-tier architecture (S3 → EC2 → RDS)
 
 ## Recent Decisions
 
 ### Architecture Decisions (from PRD)
 1. **Dual Weather Provider:** Using both OpenWeatherMap AND WeatherAPI.com for redundancy
-2. **Lambda Deployment:** Serverless architecture for automatic scaling
+2. **Simple 3-Tier Deployment:** EC2 backend + S3 frontend + RDS database (straightforward, no Lambda complexity)
 3. **LangGraph for AI:** Multi-step workflow for complex scheduling constraints
 4. **Built-in Calendar:** Custom availability system (not external calendar integration)
 5. **Instructor Priority:** Clear rule for preference conflict resolution
-6. **PostgreSQL on RDS:** Relational database for ACID compliance
+6. **PostgreSQL on RDS:** Relational database for ACID compliance (AWS RDS for staging/production)
+7. **Local Development:** Connect to AWS RDS for testing (same database as staging)
+8. **PM2 Process Manager:** Use PM2 on EC2 for process management and auto-restart
+9. **Environment-Based CORS:** Configurable CORS origins via CORS_ALLOWED_ORIGINS environment variable
 
 ### User Experience Decisions
 1. **Deadline Formula:** min(30 min before flight, 12 hours after notification)
@@ -150,9 +157,10 @@ interface NotificationService {
 ## Environment Specifics
 
 ### Development Environment
-- **Database:** Local PostgreSQL on localhost:5432 (flight_schedule_pro database)
-- **Weather APIs:** Test API keys (low rate limits) - configured in env.template
-- **AWS Services:** LocalStack or SAM Local for Lambda testing (when needed)
+- **Database:** AWS RDS PostgreSQL (flight-schedule-pro-staging-db.crws0amqe1e3.us-east-1.rds.amazonaws.com) for local testing
+- **Local Database:** Available for automated tests (flight_schedule_pro_test)
+- **Weather APIs:** Production API keys configured in AWS Secrets Manager
+- **AWS Services:** Cognito, RDS, Secrets Manager, SES configured in staging
 - **Frontend:** React + Vite dev server on localhost:3000 (npm run dev:frontend)
 - **Backend:** Express dev server on localhost:3001 (npm run dev:backend) using ts-node-dev
 - **UI Components:** shadcn/ui with Tailwind CSS and Radix UI primitives
@@ -281,6 +289,6 @@ This active context will be updated:
 - When blockers are encountered (track resolution)
 - At the end of each PR (update progress, carry forward learnings)
 
-**Last Updated:** November 2024 (PRs #1-9 Complete)  
-**Next Update:** When PR #10 begins (notification system)
+**Last Updated:** November 2024 (PRs #1-19 Complete, PR #20 In Progress)  
+**Next Update:** When PR #20 completes (staging deployment)
 

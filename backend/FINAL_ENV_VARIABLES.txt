@@ -1,0 +1,17 @@
+NODE_ENV = staging
+
+DATABASE_HOST = flight-schedule-pro-staging-db.crws0amqe1e3.us-east-1.rds.amazonaws.com
+DATABASE_NAME = flight_schedule_pro
+DATABASE_USER = postgres
+DATABASE_PASSWORD_SECRET_ARN = arn:aws:secretsmanager:us-east-1:971422717446:secret:flight-schedule-pro/staging/database-credentials-gYqeBF
+
+COGNITO_USER_POOL_ID = us-east-1_f6h1XdY8u
+COGNITO_CLIENT_ID = [GETTING NOW...]
+
+OPENAI_API_KEY_SECRET_ARN = arn:aws:secretsmanager:us-east-1:971422717446:secret:flight-schedule-pro/staging/openai-api-key-2Si5nA
+OPENWEATHERMAP_API_KEY_SECRET_ARN = arn:aws:secretsmanager:us-east-1:971422717446:secret:flight-schedule-pro/staging/openweathermap-api-key-0pDF8m
+WEATHERAPI_API_KEY_SECRET_ARN = arn:aws:secretsmanager:us-east-1:971422717446:secret:flight-schedule-pro/staging/weatherapi-com-key-a5RNBd
+
+SES_REGION = us-east-1
+LOG_LEVEL = info
+

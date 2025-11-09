@@ -23,6 +23,11 @@ export class AuthService {
 
       // Store tokens
       this.setTokens(response.data.tokens);
+      
+      // Also store user in localStorage for fallback
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
 
       return response.data;
     } catch (error) {
@@ -95,6 +100,15 @@ export class AuthService {
 
       return response.data.user;
     } catch (error) {
+      // Don't clear tokens on error - let the caller handle it
+      // This prevents automatic logout on network errors
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError<{ message: string }>;
+        if (axiosError.response?.status === 401) {
+          // Only clear tokens on actual auth failure
+          this.clearTokens();
+        }
+      }
       throw new Error('Failed to get current user');
     }
   }
@@ -143,6 +157,7 @@ export class AuthService {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(ID_TOKEN_KEY);
+    localStorage.removeItem('user');
   }
 
   /**

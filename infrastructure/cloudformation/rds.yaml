@@ -49,115 +49,54 @@ Parameters:
     Description: Database master password (min 8 chars)
     MinLength: 8
 
+  # VPC Configuration (using default VPC for demo)
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-03cd6462b46350c8e
+    Description: VPC ID (using default VPC for demo)
+
+  Subnet1Id:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-0dcbb744fa27d655a
+    Description: Subnet 1 ID (default subnet in us-east-1a)
+
+  Subnet2Id:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-0ec51c4b01051563c
+    Description: Subnet 2 ID (default subnet in us-east-1b)
+
 Resources:
-  # VPC for RDS
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-vpc'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Private Subnets for RDS
-  PrivateSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-private-subnet-1'
-
-  PrivateSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-private-subnet-2'
-
-  # DB Subnet Group
+  # DB Subnet Group (using default subnets)
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupName: !Sub '${ProjectName}-${Environment}-db-subnet-group'
-      DBSubnetGroupDescription: Subnet group for RDS PostgreSQL
+      DBSubnetGroupDescription: Subnet group for RDS PostgreSQL (demo - using default VPC)
       SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+        - !Ref Subnet1Id
+        - !Ref Subnet2Id
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-db-subnet-group'
 
-  # Security Group for Lambda (to access RDS) - Created first to break circular dependency
-  LambdaSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub '${ProjectName}-${Environment}-lambda-sg'
-      GroupDescription: Security group for Lambda functions
-      VpcId: !Ref VPC
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          CidrIp: 0.0.0.0/0
-          Description: Access to RDS
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: HTTPS for external APIs
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-lambda-sg'
-
-  # Security Group for RDS
+  # Security Group for RDS (simplified for demo - allows access from anywhere)
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub '${ProjectName}-${Environment}-db-sg'
-      GroupDescription: Security group for RDS PostgreSQL
-      VpcId: !Ref VPC
+      GroupDescription: Security group for RDS PostgreSQL (demo - public access)
+      VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 5432
           ToPort: 5432
-          SourceSecurityGroupId: !Ref LambdaSecurityGroup
-          Description: Allow Lambda access
+          CidrIp: 0.0.0.0/0
+          Description: Allow PostgreSQL access from anywhere (DEMO ONLY)
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-db-sg'
 
-  # DB Parameter Group
-  DBParameterGroup:
-    Type: AWS::RDS::DBParameterGroup
-    Properties:
-      DBParameterGroupName: !Sub '${ProjectName}-${Environment}-postgres-params'
-      Description: PostgreSQL parameter group
-      Family: postgres14
-      Parameters:
-        max_connections: '100'
-        shared_buffers: '256MB'
-        effective_cache_size: '1GB'
-        maintenance_work_mem: '64MB'
-        checkpoint_completion_target: '0.9'
-        wal_buffers: '16MB'
-        default_statistics_target: '100'
-        random_page_cost: '1.1'
-        effective_io_concurrency: '200'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-postgres-params'
+  # DB Parameter Group removed for demo - using RDS default parameter group
 
   # RDS PostgreSQL Instance
   DBInstance:
@@ -168,7 +107,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${ProjectName}-${Environment}-db'
       DBName: !Ref DBName
       Engine: postgres
-      EngineVersion: '14.10'
+      EngineVersion: '14.19'
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp3
@@ -178,7 +117,7 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref DBSecurityGroup
-      DBParameterGroupName: !Ref DBParameterGroup
+      # Using default parameter group for demo
       BackupRetentionPeriod: 7
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
@@ -187,7 +126,7 @@ Resources:
         - upgrade
       DeletionProtection: !If [IsProduction, true, false]
       MultiAZ: !If [IsProduction, true, false]
-      PubliclyAccessible: false
+      PubliclyAccessible: true
       AutoMinorVersionUpgrade: true
       CopyTagsToSnapshot: true
       Tags:
@@ -241,28 +180,10 @@ Outputs:
       Name: !Sub '${ProjectName}-${Environment}-DBName'
 
   VPCId:
-    Description: VPC ID
-    Value: !Ref VPC
+    Description: VPC ID (default VPC used)
+    Value: !Ref VpcId
     Export:
       Name: !Sub '${ProjectName}-${Environment}-VPCId'
-
-  LambdaSecurityGroupId:
-    Description: Lambda Security Group ID
-    Value: !Ref LambdaSecurityGroup
-    Export:
-      Name: !Sub '${ProjectName}-${Environment}-LambdaSecurityGroupId'
-
-  PrivateSubnet1Id:
-    Description: Private Subnet 1 ID
-    Value: !Ref PrivateSubnet1
-    Export:
-      Name: !Sub '${ProjectName}-${Environment}-PrivateSubnet1Id'
-
-  PrivateSubnet2Id:
-    Description: Private Subnet 2 ID
-    Value: !Ref PrivateSubnet2
-    Export:
-      Name: !Sub '${ProjectName}-${Environment}-PrivateSubnet2Id'
 
   DBReadReplicaEndpoint:
     Condition: IsProduction

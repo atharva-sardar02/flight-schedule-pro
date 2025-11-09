@@ -68,9 +68,9 @@ export function handleLambdaError(
 
     // Network/timeout errors are retryable
     if (
-      error.code === 'ECONNREFUSED' ||
-      error.code === 'ETIMEDOUT' ||
-      error.code === 'ENOTFOUND' ||
+      (error as any).code === 'ECONNREFUSED' ||
+      (error as any).code === 'ETIMEDOUT' ||
+      (error as any).code === 'ENOTFOUND' ||
       error.message.includes('timeout')
     ) {
       retryable = true;
@@ -215,9 +215,9 @@ export function isRetryableError(error: unknown): boolean {
   if (error instanceof Error) {
     // Network errors
     if (
-      error.code === 'ECONNREFUSED' ||
-      error.code === 'ETIMEDOUT' ||
-      error.code === 'ENOTFOUND' ||
+      (error as any).code === 'ECONNREFUSED' ||
+      (error as any).code === 'ETIMEDOUT' ||
+      (error as any).code === 'ENOTFOUND' ||
       error.message.includes('timeout')
     ) {
       return true;

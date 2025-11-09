@@ -377,7 +377,7 @@ export class WeatherService {
     return {
       location: coords,
       timestamp: new Date(),
-      visibility: parseFloat(visibilityMiles),
+      visibility: parseFloat(String(visibilityMiles)),
       ceiling,
       windSpeed: data.wind?.speed || 0, // Already in knots from imperial units
       windDirection: data.wind?.deg || 0,

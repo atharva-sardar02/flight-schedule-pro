@@ -32,8 +32,31 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // CORS Configuration
+// Support multiple origins: localhost for dev, S3/CloudFront for production
+const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+  ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : [
+      process.env.VITE_API_BASE_URL?.replace(/:\d+$/, ':3000') || 'http://localhost:3000',
+      'http://localhost:3000' // Always allow localhost for development
+    ];
+
 app.use(cors({
-  origin: process.env.VITE_API_BASE_URL?.replace(/:\d+$/, ':3000') || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // In development, be more permissive
+      if (process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -42,13 +65,77 @@ app.use(cors({
 // Middleware
 app.use(express.json());
 
-// Health check endpoint
+// Health check endpoint (Express route)
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'healthy', 
     service: 'flight-schedule-pro-backend',
     timestamp: new Date().toISOString()
   });
+});
+
+// Test route: Health check through auth handler (simulates Lambda behavior)
+app.get('/test-health', async (req, res) => {
+  try {
+    const event = {
+      httpMethod: 'GET',
+      path: '/health', // Simulate Lambda path
+      pathParameters: null,
+      queryStringParameters: req.query,
+      headers: req.headers as { [key: string]: string },
+      body: null,
+      isBase64Encoded: false,
+      requestContext: {},
+      resource: '',
+      stageVariables: null,
+      multiValueHeaders: {},
+      multiValueQueryStringParameters: null
+    };
+
+    const result = await authHandler(event as any);
+    res.status(result.statusCode);
+    if (result.headers) {
+      Object.entries(result.headers).forEach(([key, value]) => {
+        res.setHeader(key, value as string);
+      });
+    }
+    res.send(result.body);
+  } catch (error) {
+    logger.error('Test health route error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Test route: Root path through auth handler (simulates API Gateway behavior)
+app.get('/test-root', async (req, res) => {
+  try {
+    const event = {
+      httpMethod: 'GET',
+      path: '/flight-schedule-pro-staging-api', // Simulate API Gateway path
+      pathParameters: null,
+      queryStringParameters: req.query,
+      headers: req.headers as { [key: string]: string },
+      body: null,
+      isBase64Encoded: false,
+      requestContext: {},
+      resource: '',
+      stageVariables: null,
+      multiValueHeaders: {},
+      multiValueQueryStringParameters: null
+    };
+
+    const result = await authHandler(event as any);
+    res.status(result.statusCode);
+    if (result.headers) {
+      Object.entries(result.headers).forEach(([key, value]) => {
+        res.setHeader(key, value as string);
+      });
+    }
+    res.send(result.body);
+  } catch (error) {
+    logger.error('Test root route error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // Development-only: Confirm user endpoint (for testing)

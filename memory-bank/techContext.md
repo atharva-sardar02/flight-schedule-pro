@@ -22,10 +22,13 @@
   - `recharts`: Dashboard metrics visualization (to be added)
 
 ### Backend
-**TypeScript on AWS Lambda**
-- **Why:** Type safety across full stack, serverless scaling, pay-per-use pricing
-- **Runtime:** Node.js 18.x
-- **Local Development:** Express server with ts-node-dev (simpler than SAM CLI)
+**TypeScript on AWS EC2 (Deployment) / Express (Local Development)**
+- **Why:** Simple, straightforward deployment - no Lambda packaging complexity
+- **Runtime:** Node.js 20.x
+- **Local Development:** Express server with ts-node-dev on localhost:3001
+- **Staging/Production:** EC2 instance (t3.micro) running Express server with PM2 process manager
+- **Port:** 3001 (configurable via PORT environment variable)
+- **CORS:** Environment-based configuration via CORS_ALLOWED_ORIGINS (comma-separated)
 - **Key Libraries:**
   - `express`: Local development server
   - `ts-node-dev`: Hot-reload TypeScript development
@@ -42,18 +45,22 @@
 **PostgreSQL 14+ on AWS RDS**
 - **Why:** ACID compliance for booking operations, complex query support, mature ecosystem
 - **Instance Type:** 
-  - Staging: t3.micro (2 vCPU, 1 GB RAM)
+  - Staging: t3.micro (2 vCPU, 1 GB RAM) - `flight-schedule-pro-staging-db.crws0amqe1e3.us-east-1.rds.amazonaws.com`
   - Production: t3.small (2 vCPU, 2 GB RAM)
+- **Current Setup:**
+  - Staging RDS database created and accessible
+  - Local development connects to AWS RDS for testing
+  - Local PostgreSQL available for automated tests
 - **Features Used:**
   - Composite indexes for performance
   - Foreign key constraints for data integrity
   - JSONB columns for flexible metadata
-  - Connection pooling via RDS Proxy (optional for scale)
+  - Connection pooling via pg-pool
 
 ### AI/ML
 **LangGraph with LangChain TypeScript SDK**
 - **Why:** Graph-based workflow for multi-step constraint solving, clear workflow visualization
-- **LLM Provider:** Anthropic Claude (via API)
+- **LLM Provider:** OpenAI ChatGPT (gpt-4o-mini via API)
 - **Key Capabilities:**
   - Multi-step reasoning for schedule optimization
   - State management across workflow nodes
@@ -61,26 +68,26 @@
   - Fallback to simpler logic on failure
 
 ### Cloud Infrastructure
-**AWS (Amazon Web Services)**
+**AWS (Amazon Web Services) - Simple 3-Tier Architecture**
 - **Compute:**
-  - Lambda: Serverless functions (API, scheduler, AI)
-  - Provisioned concurrency for critical functions (scheduler, AI engine)
+  - EC2: Backend API server (t3.micro for staging/production, free tier eligible)
+  - PM2: Process manager for Node.js on EC2 (auto-restart, logging)
 - **Storage:**
-  - RDS PostgreSQL: Primary database
-  - S3: Frontend static hosting, logs archive
+  - RDS PostgreSQL: Primary database (staging database created)
+  - S3: Frontend static website hosting (simple, no CloudFront required)
 - **Networking:**
-  - API Gateway: REST API + WebSocket API
-  - CloudFront: CDN for frontend
-  - VPC: Secure network for RDS
+  - API Gateway: REST API (optional, or direct EC2 access)
+  - CloudFront: CDN for frontend (optional)
+  - Security Groups: EC2 and RDS access control
 - **Security:**
-  - Cognito: User authentication (user pools)
-  - Secrets Manager: API key storage with rotation
+  - Cognito: User authentication (user pools) - deployed
+  - Secrets Manager: API key storage with rotation - configured
   - IAM: Role-based access control
 - **Monitoring:**
   - CloudWatch: Logs, metrics, dashboards, alarms
   - CloudWatch Logs Insights: Log querying
 - **Scheduling:**
-  - EventBridge: 10-minute weather monitoring trigger
+  - EventBridge: 10-minute weather monitoring trigger (or cron on EC2)
 - **Notifications:**
   - SES: Transactional email delivery
   - SNS: CloudWatch alarm notifications to ops team
@@ -98,10 +105,10 @@
    - Cost: $0 within free tier, $20/month for 5M calls
 
 **AI/LLM**
-- **Anthropic Claude API**
-  - Model: Claude 3 (Sonnet or Opus)
-  - Cost: ~$0.15 per scheduling request
-  - Estimated monthly: $30-50 (10-15 conflicts/day)
+- **OpenAI ChatGPT API**
+  - Model: gpt-4o-mini
+  - Cost: ~$0.10 per scheduling request
+  - Estimated monthly: $20-40 (10-15 conflicts/day)
 
 ## Development Setup
 
@@ -131,7 +138,7 @@ OPENWEATHERMAP_API_KEY=your_key
 WEATHERAPI_COM_KEY=your_key
 
 # AI
-ANTHROPIC_API_KEY=your_key
+OPENAI_API_KEY=your_key
 
 # Application
 WEATHER_CHECK_INTERVAL_MINUTES=10
@@ -260,65 +267,54 @@ PREFERENCE_DEADLINE_MIN_BEFORE_FLIGHT_MINUTES=30
 
 ## Deployment Strategy
 
-### CI/CD Pipeline (GitHub Actions or AWS CodePipeline)
-```yaml
-stages:
-  - lint: ESLint + Prettier check
-  - test: Run unit tests
-  - build: Compile TypeScript, bundle frontend
-  - deploy-staging: CloudFormation stack update
-  - integration-test: Run tests against staging
-  - deploy-production: Manual approval + CloudFormation
-  - smoke-test: Verify production health
+### Simple 3-Tier Deployment Architecture
+**Why this approach:**
+- ✅ No complex packaging or Lambda deployment
+- ✅ Same codebase as local development
+- ✅ Easy debugging and monitoring
+- ✅ No cold starts
+- ✅ Simple environment variable management
+- ✅ Straightforward and maintainable
+
+### Deployment Architecture
+```
+Frontend (S3) → Backend (EC2) → Database (RDS)
 ```
 
-### Infrastructure as Code
+- **Backend:** EC2 instance (t3.micro) running Express server with PM2
+- **Frontend:** S3 bucket with static website hosting
+- **Database:** AWS RDS PostgreSQL (already created)
+- **Process Manager:** PM2 for automatic restarts and logging
+
+### Deployment Documentation
+**Location:** `docs/` and root
+- `docs/SIMPLE_DEPLOYMENT.md`: Complete simple deployment guide ⭐
+- `README_DEPLOYMENT.md`: Quick reference
+- `scripts/deploy-frontend.sh`: Frontend deployment (Linux/Mac)
+- `scripts/deploy-frontend.ps1`: Frontend deployment (Windows)
+- `scripts/ec2-setup.sh`: EC2 backend setup script
+
+### Deployment Steps
+1. Create EC2 instance (Amazon Linux 2023, t3.micro)
+2. Configure RDS security group to allow EC2
+3. Install Node.js 20, PM2, Git on EC2
+4. Clone repository and install dependencies
+5. Configure environment variables (.env file with CORS_ALLOWED_ORIGINS)
+6. Start backend with PM2
+7. Create S3 bucket and enable static website hosting
+8. Deploy frontend to S3 using deployment script
+9. Test endpoints
+
+### Infrastructure as Code (Optional)
 - **Tool:** AWS CloudFormation (YAML templates)
 - **Location:** `infrastructure/cloudformation/`
-- **Stack Structure (11 templates):**
-  - `cognito.yaml`: User pools, groups, identity pool
-  - `rds.yaml`: PostgreSQL database with VPC, subnets, security groups
-  - `lambda.yaml`: Three Lambda functions (weather monitor, reschedule engine, API handler)
-  - `api-gateway.yaml`: REST and WebSocket APIs with Cognito authorizers
-  - `eventbridge.yaml`: Scheduled rule for 10-minute weather monitoring
+- **Stacks:**
+  - `cognito.yaml`: User pools (deployed)
+  - `rds.yaml`: PostgreSQL database (deployed)
+  - `secrets.yaml`: Secrets Manager (deployed)
+  - `s3.yaml`: Frontend hosting bucket
   - `ses.yaml`: Email service configuration
-  - `cloudwatch.yaml`: Alarms and dashboards for monitoring
-  - `secrets.yaml`: Secrets Manager for API keys and credentials
-  - `sns.yaml`: Alert notification topics
-  - `s3.yaml`: Frontend hosting bucket + logs bucket
-  - `cloudfront.yaml`: CDN distribution for frontend
-
-### Deployment Scripts
-**Location:** `infrastructure/scripts/`
-
-```bash
-# Local development setup
-./infrastructure/scripts/setup-local.sh
-# - Checks prerequisites (Node.js, PostgreSQL, AWS CLI)
-# - Installs all dependencies
-# - Creates database and runs migrations
-# - Loads seed data
-
-# Staging deployment
-./infrastructure/scripts/deploy-staging.sh
-# - Validates all CloudFormation templates
-# - Deploys infrastructure stacks in correct order
-# - Requires environment variables: DB_MASTER_PASSWORD, API keys
-# - Includes error handling and logging
-
-# Production deployment
-./infrastructure/scripts/deploy-production.sh
-# - Pre-deployment checks (Git status, branch validation)
-# - Uses CloudFormation change sets for safety
-# - Manual approval steps
-# - Enhanced monitoring and rollback capabilities
-```
-
-### Blue/Green Deployment (Lambda)
-- Use Lambda aliases (blue = current, green = new version)
-- Shift traffic gradually: 10% → 50% → 100%
-- Monitor error rates at each stage
-- Automatic rollback if errors exceed 3%
+  - `cloudwatch.yaml`: Alarms and dashboards
 
 ## Monitoring & Observability
 
@@ -430,19 +426,19 @@ logger.error('Weather API failure', {
 ## Cost Optimization
 
 ### Estimated Monthly Costs
-- **Lambda:** $20-30 (with provisioned concurrency)
+- **EC2:** $7-10/month (t3.micro, free tier eligible)
 - **RDS:** $25-30 (t3.small production, t3.micro staging)
-- **S3:** $2-5 (frontend + logs)
+- **S3:** $0.50-2 (frontend static hosting + logs)
 - **CloudWatch:** $5-10 (logs and metrics)
-- **AI API:** $30-50 (Anthropic Claude)
+- **AI API:** $30-50 (OpenAI ChatGPT)
 - **Weather APIs:** $0 (within free tier)
 - **SES:** $5 (5000 emails)
-- **CloudFront:** $5
-- **Total:** ~$100-150/month
+- **CloudFront:** $5 (optional)
+- **Total:** ~$75-100/month (reduced from Lambda approach)
 
 ### Cost Reduction Strategies
 - Stay within weather API free tiers (1M calls/month each)
-- Use Lambda free tier (1M requests/month)
+- Use EC2 free tier (750 hours/month for t3.micro)
 - Aggressive caching to reduce API calls
 - CloudWatch Logs retention: 7 days for non-critical logs
 - S3 lifecycle policies: Move old logs to Glacier

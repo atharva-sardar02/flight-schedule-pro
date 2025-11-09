@@ -33,12 +33,21 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Unauthorized - clear all tokens and redirect to login
+      // Unauthorized - clear all tokens
       localStorage.removeItem('flight_schedule_access_token');
       localStorage.removeItem('flight_schedule_refresh_token');
       localStorage.removeItem('flight_schedule_id_token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      
+      // Only redirect if not already on login/register page
+      // This prevents redirect loops and allows components to handle auth errors
+      const currentPath = window.location.pathname;
+      if (!currentPath.includes('/login') && !currentPath.includes('/register')) {
+        // Use a small delay to allow error handling in components first
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 100);
+      }
     }
     return Promise.reject(error);
   }

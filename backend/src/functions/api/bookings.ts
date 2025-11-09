@@ -57,7 +57,7 @@ export async function handler(
     if (!authResult.authorized) {
       logLambdaEnd('bookingsAPI', false, 401);
       logAPICall(event.path, event.httpMethod, 401, Date.now() - startTime);
-      return authResult.response;
+      return (authResult as any).response;
     }
 
     const user = authResult.user;

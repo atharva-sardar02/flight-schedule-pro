@@ -9,7 +9,10 @@
 ✅ Stack 1: SNS (Notifications) - **DEPLOYED**
 ✅ Stack 2: Secrets Manager (API Keys) - **DEPLOYED**
 ✅ Stack 3: Cognito (Authentication) - **DEPLOYED** (Fixed SMS MFA issue)
-⏸️ Stack 4: RDS (Database) - **FAILED** (Need to check error and fix)
+✅ Stack 4: RDS (Database) - **CREATED VIA CONSOLE**
+   - Endpoint: `flight-schedule-pro-staging-db.crws0amqe1e3.us-east-1.rds.amazonaws.com`
+   - Port: 5432
+   - Database: `flight_schedule_pro`
 ⏳ Stack 5: Lambda (Backend Functions) - Pending
 ⏳ Stack 6: API Gateway (REST API) - Pending
 ⏳ Stack 7: EventBridge (Scheduler) - Pending

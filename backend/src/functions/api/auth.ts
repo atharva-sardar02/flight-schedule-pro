@@ -52,7 +52,29 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let result: APIGatewayProxyResult;
 
     // Route to appropriate handler
-    if (path.endsWith('/login') && method === 'POST') {
+    // Handle health check - support various path formats from API Gateway
+    const normalizedPath = path.toLowerCase().trim();
+    const isHealthCheck = normalizedPath === '/' || 
+                         normalizedPath === '/health' || 
+                         normalizedPath.endsWith('/health') ||
+                         normalizedPath === '/flight-schedule-pro-staging-api' ||
+                         normalizedPath.endsWith('/flight-schedule-pro-staging-api') ||
+                         normalizedPath.includes('health') ||
+                         (normalizedPath === '' && method === 'GET');
+    
+    if (isHealthCheck && method === 'GET') {
+      // Health check endpoint
+      result = {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          status: 'ok',
+          service: 'flight-schedule-pro-api',
+          timestamp: new Date().toISOString(),
+          path: path, // Include path for debugging
+        }),
+      };
+    } else if (path.endsWith('/login') && method === 'POST') {
       result = await handleLogin(event, headers);
     } else if (path.endsWith('/register') && method === 'POST') {
       result = await handleRegister(event, headers);
@@ -67,7 +89,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
         headers,
         body: JSON.stringify({
           error: 'Not Found',
-          message: `Route ${method} ${path} not found`,
+          message: `Route ${method} ${path} not found. Available routes: /health, /auth/login, /auth/register, /auth/refresh, /auth/me`,
         }),
       };
     }
@@ -127,32 +149,49 @@ async function handleLogin(
     // Get user details from Cognito
     const cognitoUser = await AuthService.verifyToken(tokens.accessToken);
 
-    // Look up database user ID using Cognito user ID
-    const pool = getDbPool();
-    const dbUser = await pool.query(
-      'SELECT id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at FROM users WHERE cognito_user_id = $1',
-      [cognitoUser.id]
-    );
-
     let user;
-    if (dbUser.rows.length === 0) {
-      // User exists in Cognito but not in database - use Cognito user info
-      logger.warn('User found in Cognito but not in database', { cognitoUserId: cognitoUser.id });
+    
+    // Skip database lookup for mock auth
+    if (process.env.NODE_ENV === 'development' && process.env.MOCK_AUTH === 'true') {
+      // Use Cognito user info directly for mock auth
       user = cognitoUser;
+      logger.info('Using mock auth - skipping database lookup', { email: cognitoUser.email });
     } else {
-      // Return user with database ID
-      const userRow = dbUser.rows[0];
-      user = {
-        id: userRow.id, // Use database ID, not Cognito ID
-        email: userRow.email,
-        firstName: userRow.first_name,
-        lastName: userRow.last_name,
-        phoneNumber: userRow.phone_number,
-        role: userRow.role,
-        trainingLevel: userRow.training_level,
-        createdAt: userRow.created_at,
-        updatedAt: userRow.updated_at,
-      };
+      // Look up database user ID using Cognito user ID
+      try {
+        const pool = getDbPool();
+        const dbUser = await pool.query(
+          'SELECT id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at FROM users WHERE cognito_user_id = $1',
+          [cognitoUser.id]
+        );
+
+        if (dbUser.rows.length === 0) {
+          // User exists in Cognito but not in database - use Cognito user info
+          logger.warn('User found in Cognito but not in database', { cognitoUserId: cognitoUser.id });
+          user = cognitoUser;
+        } else {
+          // Return user with database ID
+          const userRow = dbUser.rows[0];
+          user = {
+            id: userRow.id, // Use database ID, not Cognito ID
+            email: userRow.email,
+            firstName: userRow.first_name,
+            lastName: userRow.last_name,
+            phoneNumber: userRow.phone_number,
+            role: userRow.role,
+            trainingLevel: userRow.training_level,
+            createdAt: userRow.created_at,
+            updatedAt: userRow.updated_at,
+          };
+        }
+      } catch (dbError: any) {
+        // If database table doesn't exist or query fails, use Cognito user info
+        logger.warn('Database lookup failed, using Cognito user info', { 
+          error: dbError.message,
+          cognitoUserId: cognitoUser.id 
+        });
+        user = cognitoUser;
+      }
     }
 
     logger.info('User logged in successfully', { userId: user.id, email: user.email });
@@ -224,20 +263,31 @@ async function handleRegister(
     // Register user in Cognito
     const result = await AuthService.register(data);
 
-    // Create user record in database
-    const pool = getDbPool();
-    const client = await pool.connect();
+    // Create user record in database (skip for mock auth)
+    if (!(process.env.NODE_ENV === 'development' && process.env.MOCK_AUTH === 'true')) {
+      try {
+        const pool = getDbPool();
+        const client = await pool.connect();
 
-    try {
-      await client.query(
-        `INSERT INTO users (cognito_user_id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-        [result.userId, data.email, data.firstName, data.lastName, data.phoneNumber || null, data.role, data.trainingLevel || null]
-      );
+        try {
+          await client.query(
+            `INSERT INTO users (cognito_user_id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+            [result.userId, data.email, data.firstName, data.lastName, data.phoneNumber || null, data.role, data.trainingLevel || null]
+          );
 
-      logger.info('User record created in database', { userId: result.userId });
-    } finally {
-      client.release();
+          logger.info('User record created in database', { userId: result.userId });
+        } finally {
+          client.release();
+        }
+      } catch (dbError: any) {
+        logger.warn('Failed to create user record in database (continuing anyway)', { 
+          error: dbError.message,
+          userId: result.userId 
+        });
+      }
+    } else {
+      logger.info('Mock auth - skipping database user creation', { email: data.email });
     }
 
     return {
@@ -343,16 +393,8 @@ async function handleGetCurrentUser(
     const token = authHeader.split(' ')[1];
     const cognitoUser = await AuthService.verifyToken(token);
 
-    // Look up database user ID using Cognito user ID
-    const pool = getDbPool();
-    const dbUser = await pool.query(
-      'SELECT id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at FROM users WHERE cognito_user_id = $1',
-      [cognitoUser.id]
-    );
-
-    if (dbUser.rows.length === 0) {
-      // User exists in Cognito but not in database - return Cognito user info
-      logger.warn('User found in Cognito but not in database', { cognitoUserId: cognitoUser.id });
+    // Skip database lookup for mock auth
+    if (process.env.NODE_ENV === 'development' && process.env.MOCK_AUTH === 'true') {
       return {
         statusCode: 200,
         headers,
@@ -360,25 +402,55 @@ async function handleGetCurrentUser(
       };
     }
 
-    // Return user with database ID
-    const userRow = dbUser.rows[0];
-    const user = {
-      id: userRow.id, // Use database ID, not Cognito ID
-      email: userRow.email,
-      firstName: userRow.first_name,
-      lastName: userRow.last_name,
-      phoneNumber: userRow.phone_number,
-      role: userRow.role,
-      trainingLevel: userRow.training_level,
-      createdAt: userRow.created_at,
-      updatedAt: userRow.updated_at,
-    };
+    // Look up database user ID using Cognito user ID
+    try {
+      const pool = getDbPool();
+      const dbUser = await pool.query(
+        'SELECT id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at FROM users WHERE cognito_user_id = $1',
+        [cognitoUser.id]
+      );
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ user }),
-    };
+      if (dbUser.rows.length === 0) {
+        // User exists in Cognito but not in database - return Cognito user info
+        logger.warn('User found in Cognito but not in database', { cognitoUserId: cognitoUser.id });
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ user: cognitoUser }),
+        };
+      }
+
+      // Return user with database ID
+      const userRow = dbUser.rows[0];
+      const user = {
+        id: userRow.id, // Use database ID, not Cognito ID
+        email: userRow.email,
+        firstName: userRow.first_name,
+        lastName: userRow.last_name,
+        phoneNumber: userRow.phone_number,
+        role: userRow.role,
+        trainingLevel: userRow.training_level,
+        createdAt: userRow.created_at,
+        updatedAt: userRow.updated_at,
+      };
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ user }),
+      };
+    } catch (dbError: any) {
+      // If database table doesn't exist, return Cognito user info
+      logger.warn('Database lookup failed, using Cognito user info', { 
+        error: dbError.message,
+        cognitoUserId: cognitoUser.id 
+      });
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ user: cognitoUser }),
+      };
+    }
   } catch (error: any) {
     logger.error('Get current user failed', { error });
 

@@ -358,7 +358,7 @@ export const handler = async (
     const duration = Date.now() - startTime;
     // Consider success if we processed at least some bookings, even with errors
     const success = errors < processedCount;
-    logLambdaEnd('weatherMonitor', duration, success);
+    logLambdaEnd('weatherMonitor', Boolean(success), duration);
 
     // Return success even with some errors (graceful degradation)
     return {
@@ -377,7 +377,7 @@ export const handler = async (
   } catch (error: any) {
     const duration = Date.now() - startTime;
     logError('Weather monitoring cycle failed', error);
-    logLambdaEnd('weatherMonitor', duration, false);
+    logLambdaEnd('weatherMonitor', false, duration);
 
     return {
       statusCode: 500,
@@ -400,7 +400,7 @@ export const manualTrigger = async (): Promise<any> => {
   return handler({
     version: '0',
     id: 'manual-trigger',
-    'detail-type': 'Manual Trigger',
+    'detail-type': 'Scheduled Event' as const,
     source: 'manual',
     account: '',
     time: new Date().toISOString(),

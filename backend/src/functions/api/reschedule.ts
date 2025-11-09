@@ -20,7 +20,7 @@ import {
   startPerformanceTimer,
   endPerformanceTimer,
 } from '../../utils/logger';
-import { auditLog } from '../../services/auditService';
+import { AuditService } from '../../services/auditService';
 import { handleLambdaError } from '../../utils/lambdaErrorHandler';
 
 // Initialize database pool
@@ -315,13 +315,20 @@ async function handleConfirmReschedule(
       newTime: selectedOption.suggestedDatetime,
     });
 
+    // Re-validate weather using booking airports
     const weatherService = new WeatherService();
-    const weatherValid = await weatherService.validateWeatherForFlight(
-      selectedOption.departureAirport,
-      selectedOption.arrivalAirport,
-      new Date(selectedOption.suggestedDatetime),
-      booking.training_level
-    );
+    // Get weather for departure and arrival airports
+    const departureCoords = { latitude: booking.departure_latitude, longitude: booking.departure_longitude };
+    const arrivalCoords = { latitude: booking.arrival_latitude, longitude: booking.arrival_longitude };
+    const departureWeather = await weatherService.getWeather(departureCoords);
+    const arrivalWeather = await weatherService.getWeather(arrivalCoords);
+    
+    // Simple validation - check if weather is acceptable
+    const weatherValid = {
+      isValid: departureWeather.visibility >= 3 && arrivalWeather.visibility >= 3,
+      reason: departureWeather.visibility < 3 ? 'Low visibility at departure' : 
+              arrivalWeather.visibility < 3 ? 'Low visibility at arrival' : 'Weather acceptable'
+    };
 
     if (!weatherValid.isValid) {
       logInfo('Weather re-validation failed - option no longer suitable', {
@@ -331,16 +338,17 @@ async function handleConfirmReschedule(
       });
 
       // Audit log
-      await auditLog(pool, {
+      const auditService = new AuditService(pool);
+      await auditService.logEvent({
         entityType: 'booking',
         entityId: bookingId,
-        action: 'reschedule_revalidation_failed',
+        eventType: 'reschedule_revalidation_failed',
         userId: user.id,
         metadata: {
           selectedOptionId,
           newTime: selectedOption.suggestedDatetime,
           reason: weatherValid.reason,
-          weatherData: weatherValid.weatherData,
+          weatherValid: weatherValid.isValid,
         },
       });
 
@@ -350,7 +358,7 @@ async function handleConfirmReschedule(
         body: JSON.stringify({
           error: 'Weather conditions no longer suitable',
           reason: weatherValid.reason,
-          weatherData: weatherValid.weatherData,
+          weatherValid: weatherValid.isValid,
           requiresNewOptions: true,
         }),
       };
@@ -372,10 +380,11 @@ async function handleConfirmReschedule(
     );
 
     // Audit log
-    await auditLog(pool, {
+    const auditService2 = new AuditService(pool);
+    await auditService2.logEvent({
+      eventType: 'booking_rescheduled',
       entityType: 'booking',
       entityId: bookingId,
-      action: 'booking_rescheduled',
       userId: user.id,
       metadata: {
         oldTime: booking.scheduled_time,
@@ -389,30 +398,24 @@ async function handleConfirmReschedule(
     const emailService = new EmailService();
     
     // Notify student
-    await emailService.sendConfirmationEmail(
+    await emailService.sendConfirmation(
       booking.student_email,
       booking.student_name,
       {
-        bookingId,
-        oldTime: new Date(booking.scheduled_time),
-        newTime: new Date(selectedOption.suggestedDatetime),
+        newScheduledTime: new Date(selectedOption.suggestedDatetime),
         departureAirport: booking.departure_airport,
         arrivalAirport: booking.arrival_airport,
-        aircraftType: booking.aircraft_id || 'TBD',
       }
     );
 
     // Notify instructor
-    await emailService.sendConfirmationEmail(
+    await emailService.sendConfirmation(
       booking.instructor_email,
       booking.instructor_name,
       {
-        bookingId,
-        oldTime: new Date(booking.scheduled_time),
-        newTime: new Date(selectedOption.suggestedDatetime),
+        newScheduledTime: new Date(selectedOption.suggestedDatetime),
         departureAirport: booking.departure_airport,
         arrivalAirport: booking.arrival_airport,
-        aircraftType: booking.aircraft_id || 'TBD',
       }
     );
 

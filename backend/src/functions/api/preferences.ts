@@ -18,7 +18,7 @@ import {
   endPerformanceTimer,
 } from '../../utils/logger';
 import { isDeadlinePassed } from '../../utils/deadlineCalculator';
-import { auditLog } from '../../services/auditService';
+import { AuditService } from '../../services/auditService';
 import { handleLambdaError } from '../../utils/lambdaErrorHandler';
 
 // Initialize database pool
@@ -139,10 +139,11 @@ async function handleSubmitPreference(
       });
 
       // Audit log
-      await auditLog(pool, {
+      const auditService = new AuditService(pool);
+      await auditService.logEvent({
+        eventType: 'preference_submission_rejected',
         entityType: 'booking',
         entityId: bookingId,
-        action: 'preference_submission_rejected',
         userId: user.id,
         metadata: {
           reason: 'Deadline passed',
@@ -171,10 +172,11 @@ async function handleSubmitPreference(
     });
 
     // Audit log
-    await auditLog(pool, {
+    const auditService2 = new AuditService(pool);
+    await auditService2.logEvent({
+      eventType: 'preference_submitted',
       entityType: 'booking',
       entityId: bookingId,
-      action: 'preference_submitted',
       userId: user.id,
       metadata: {
         option1Id,
@@ -368,10 +370,11 @@ async function handleManualEscalation(
     );
 
     // Audit log
-    await auditLog(pool, {
+    const auditService3 = new AuditService(pool);
+    await auditService3.logEvent({
+      eventType: 'manual_escalation',
       entityType: 'booking',
       entityId: bookingId,
-      action: 'manual_escalation',
       userId: user.id,
       metadata: {
         resolution,

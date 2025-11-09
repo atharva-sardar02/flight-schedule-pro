@@ -12,7 +12,7 @@ import { WeatherValidator } from './weatherValidator';
 import { WeatherService } from '../../services/weatherService';
 import { AvailabilityService } from '../../services/availabilityService';
 import { RescheduleOptionsService } from '../../services/rescheduleOptionsService';
-import { TrainingLevel } from '../../types/booking';
+import { TrainingLevel } from '../../types/weather';
 import { logInfo, logWarn, logError } from '../../utils/logger';
 
 // State interface for LangGraph
@@ -106,16 +106,16 @@ export class RescheduleEngine {
       };
 
       // Execute workflow
-      const result = await workflow.invoke(initialState);
+      const result = await (workflow as any).invoke(initialState);
 
       if (result.error) {
-        throw new Error(result.error);
+        throw new Error(String(result.error || 'Unknown error'));
       }
 
       // Save options to database
       await this.rescheduleOptionsService.deleteOptionsByBooking(bookingId);
       await this.rescheduleOptionsService.createOptions(
-        result.finalOptions.map((opt) => ({
+        (result.finalOptions as any[]).map((opt: any) => ({
           bookingId,
           suggestedDatetime: opt.datetime,
           weatherForecast: opt.weatherForecast,
@@ -125,10 +125,10 @@ export class RescheduleEngine {
 
       logInfo('AI rescheduling completed', {
         bookingId,
-        optionsGenerated: result.finalOptions.length,
+        optionsGenerated: (result.finalOptions as any[]).length,
       });
 
-      return result.finalOptions;
+      return result.finalOptions as RescheduleOption[];
     } catch (error: any) {
       logError('AI rescheduling failed', error, { bookingId });
       throw error;
@@ -162,11 +162,11 @@ export class RescheduleEngine {
     workflow.addNode('rankOptions', this.rankAndSelectTop3.bind(this));
 
     // Define edges
-    workflow.addEdge(START, 'findCandidates');
-    workflow.addEdge('findCandidates', 'checkWeather');
-    workflow.addEdge('checkWeather', 'checkAvailability');
-    workflow.addEdge('checkAvailability', 'rankOptions');
-    workflow.addEdge('rankOptions', END);
+    (workflow as any).addEdge(START, 'findCandidates');
+    (workflow as any).addEdge('findCandidates', 'checkWeather');
+    (workflow as any).addEdge('checkWeather', 'checkAvailability');
+    (workflow as any).addEdge('checkAvailability', 'rankOptions');
+    (workflow as any).addEdge('rankOptions', END);
 
     return workflow.compile();
   }

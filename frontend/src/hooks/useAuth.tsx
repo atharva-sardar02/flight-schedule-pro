@@ -26,8 +26,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const initializeAuth = async () => {
     try {
       if (AuthService.isAuthenticated()) {
-        const currentUser = await AuthService.getCurrentUser();
-        setUser(currentUser);
+        try {
+          const currentUser = await AuthService.getCurrentUser();
+          setUser(currentUser);
+        } catch (error) {
+          // If getCurrentUser fails, try to use stored user data
+          console.warn('Failed to fetch current user, checking localStorage', error);
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            try {
+              setUser(JSON.parse(storedUser));
+            } catch (e) {
+              console.error('Failed to parse stored user', e);
+            }
+          }
+        }
 
         // Set tokens from localStorage
         const accessToken = AuthService.getAccessToken();
@@ -45,7 +58,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     } catch (error) {
       console.error('Failed to initialize auth', error);
-      AuthService.clearTokens();
+      // Don't clear tokens here - let user try to use the app
+      // Only clear if we're sure auth is invalid
     } finally {
       setIsLoading(false);
     }

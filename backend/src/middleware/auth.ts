@@ -29,7 +29,7 @@ export function extractToken(event: APIGatewayProxyEvent): string | null {
     return null;
   }
 
-  return parts[1];
+  return parts[1] || null;
 }
 
 /**
@@ -137,7 +137,7 @@ export function hasRole(user: User, allowedRoles: string[]): boolean {
  */
 export function requiresMFA(user: User): boolean {
   // Admin roles require MFA
-  return user.role === 'ADMIN';
+  return (user.role as string) === 'ADMIN';
 }
 
 /**

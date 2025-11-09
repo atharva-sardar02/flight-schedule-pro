@@ -35,9 +35,9 @@ export const availabilityHandler = async (
     // Authenticate request
     const authResult = await requireAuth(event);
     if (!authResult.authorized) {
-      return authResult.response;
+      return (authResult as any).response;
     }
-    const user = authResult.user;
+    const user = (authResult as any).user;
 
     const availabilityService = new AvailabilityService(getDbPool());
     const method = event.httpMethod;

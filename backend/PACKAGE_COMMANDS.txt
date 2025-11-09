@@ -1,0 +1,28 @@
+# Lambda Packaging Commands
+# Run these commands one by one in PowerShell from the backend directory
+
+# Step 1: Navigate to backend directory
+cd D:\gauntlet-ai\flight-schedule-pro\backend
+
+# Step 2: Install production dependencies only
+npm install --production
+
+# Step 3: Create package directory
+New-Item -ItemType Directory -Path lambda-package -Force
+
+# Step 4: Copy compiled files from dist/
+Copy-Item -Path "dist\*" -Destination "lambda-package\" -Recurse -Force
+
+# Step 5: Copy node_modules
+Copy-Item -Path "node_modules" -Destination "lambda-package\node_modules" -Recurse -Force
+
+# Step 6: Create ZIP file
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory("lambda-package", "lambda-package.zip")
+
+# Step 7: Check file size
+Get-Item lambda-package.zip | Select-Object Name, @{Name="Size(MB)";Expression={[math]::Round($_.Length/1MB, 2)}}
+
+# Step 8: Clean up temporary directory (optional)
+Remove-Item -Recurse -Force lambda-package
+
