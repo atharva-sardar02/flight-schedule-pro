@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   X,
+  AlertCircle,
 } from 'lucide-react';
 import { useState } from 'react';
 import { NotificationToast } from '@/components/notifications/NotificationToast';
@@ -37,6 +38,7 @@ export function Layout({ children }: LayoutProps) {
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/bookings', label: 'Bookings', icon: Calendar },
+    { path: '/reschedules', label: 'Active Reschedules', icon: AlertCircle },
     { path: '/availability', label: 'Availability', icon: CalendarClock },
     { path: '/settings', label: 'Settings', icon: Settings },
   ];

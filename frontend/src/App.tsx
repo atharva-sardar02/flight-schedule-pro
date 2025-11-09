@@ -14,6 +14,7 @@ const BookingList = lazy(() => import('./components/booking/BookingList'));
 const CreateBooking = lazy(() => import('./components/booking/CreateBooking'));
 const BookingDetails = lazy(() => import('./components/booking/BookingDetails'));
 const ReschedulePage = lazy(() => import('./components/rescheduling/ReschedulePage'));
+const ActiveReschedules = lazy(() => import('./components/rescheduling/ActiveReschedules'));
 const AvailabilityCalendar = lazy(() => import('./components/calendar/AvailabilityCalendar').then(module => ({ default: module.AvailabilityCalendar })));
 const Settings = lazy(() => import('./components/settings/Settings').then(module => ({ default: module.Settings })));
 
@@ -112,6 +113,23 @@ function App() {
                         <div className="max-w-4xl mx-auto">
                           <Suspense fallback={<LoadingSpinner />}>
                             <ReschedulePage />
+                          </Suspense>
+                        </div>
+                      </div>
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/reschedules"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <div className="p-6">
+                        <div className="max-w-7xl mx-auto">
+                          <Suspense fallback={<LoadingSpinner />}>
+                            <ActiveReschedules />
                           </Suspense>
                         </div>
                       </div>
