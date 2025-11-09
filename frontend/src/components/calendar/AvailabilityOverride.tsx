@@ -33,12 +33,21 @@ export const AvailabilityOverride: React.FC = () => {
     reason: '',
   });
 
+  // Helper to format date in local timezone (YYYY-MM-DD)
+  const formatDateLocal = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Fetch overrides for the next 90 days
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
+    // Use local dates to avoid timezone shifts
+    const today = formatDateLocal(new Date());
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + 90);
-    const endDate = futureDate.toISOString().split('T')[0];
+    const endDate = formatDateLocal(futureDate);
     fetchOverrides(today, endDate);
   }, [fetchOverrides]);
 
@@ -75,8 +84,26 @@ export const AvailabilityOverride: React.FC = () => {
     }
   };
 
+  // Helper to format date in local timezone (YYYY-MM-DD)
+  const formatDateLocal = (dateString: string): string => {
+    // If it's already in YYYY-MM-DD format, use it directly
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return dateString;
+    }
+    // Otherwise, parse and format
+    const d = new Date(dateString);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    // Use the local date string to avoid timezone issues
+    const localDate = formatDateLocal(dateString);
+    const [year, month, day] = localDate.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    return date.toLocaleDateString('en-US', {
       weekday: 'short',
       year: 'numeric',
       month: 'short',
@@ -85,7 +112,12 @@ export const AvailabilityOverride: React.FC = () => {
   };
 
   const sortedOverrides = [...overrides].sort(
-    (a, b) => new Date(a.overrideDate).getTime() - new Date(b.overrideDate).getTime()
+    (a, b) => {
+      // Sort by date string directly to avoid timezone issues
+      const dateA = formatDateLocal(a.overrideDate);
+      const dateB = formatDateLocal(b.overrideDate);
+      return dateA.localeCompare(dateB);
+    }
   );
 
   return (

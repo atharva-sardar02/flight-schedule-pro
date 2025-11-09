@@ -185,19 +185,24 @@ export class AvailabilityService {
     if (data.startTime) this.validateTimeFormat(data.startTime);
     if (data.endTime) this.validateTimeFormat(data.endTime);
 
-    // Validate date
-    const overrideDate = new Date(data.overrideDate);
-    if (isNaN(overrideDate.getTime())) {
-      throw new Error('Invalid date format');
+    // Validate and normalize date (ensure it's YYYY-MM-DD format, no timezone conversion)
+    // The date string from frontend is already in YYYY-MM-DD format, use it directly
+    const dateMatch = data.overrideDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!dateMatch) {
+      throw new Error('Invalid date format. Expected YYYY-MM-DD');
     }
+    
+    // Use the date string directly to avoid timezone conversion
+    // PostgreSQL DATE type stores dates without time, so this is safe
+    const overrideDateStr = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
 
     const result = await this.pool.query(
       `INSERT INTO availability_overrides (user_id, override_date, start_time, end_time, is_blocked, reason)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2::date, $3, $4, $5, $6)
        RETURNING *`,
       [
         userId,
-        data.overrideDate,
+        overrideDateStr, // Use normalized date string
         data.startTime || null,
         data.endTime || null,
         data.isBlocked,
@@ -241,6 +246,17 @@ export class AvailabilityService {
     const updates: string[] = [];
     const values: any[] = [];
     let valueIndex = 1;
+
+    // Handle overrideDate update with proper date normalization
+    if (data.overrideDate) {
+      const dateMatch = data.overrideDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!dateMatch) {
+        throw new Error('Invalid date format. Expected YYYY-MM-DD');
+      }
+      const overrideDateStr = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+      updates.push(`override_date = $${valueIndex++}::date`);
+      values.push(overrideDateStr);
+    }
 
     if (data.startTime !== undefined) {
       updates.push(`start_time = $${valueIndex++}`);
@@ -341,13 +357,23 @@ export class AvailabilityService {
     const slots: AvailabilitySlot[] = [];
     const overrideMap = new Map<string, AvailabilityOverride[]>();
 
-    // Group overrides by date
+    // Group overrides by date (use date string directly to avoid timezone issues)
     overrides.forEach((override) => {
-      // Handle both Date objects and date strings
-      const overrideDate = override.overrideDate instanceof Date 
-        ? override.overrideDate 
-        : new Date(override.overrideDate);
-      const dateKey = overrideDate.toISOString().split('T')[0];
+      // Extract date string directly (YYYY-MM-DD format)
+      let dateKey: string;
+      if (override.overrideDate instanceof Date) {
+        const year = override.overrideDate.getFullYear();
+        const month = String(override.overrideDate.getMonth() + 1).padStart(2, '0');
+        const day = String(override.overrideDate.getDate()).padStart(2, '0');
+        dateKey = `${year}-${month}-${day}`;
+      } else if (typeof override.overrideDate === 'string') {
+        // Extract YYYY-MM-DD from string
+        const dateMatch = override.overrideDate.match(/^(\d{4}-\d{2}-\d{2})/);
+        dateKey = dateMatch ? dateMatch[1] : override.overrideDate;
+      } else {
+        dateKey = String(override.overrideDate);
+      }
+      
       if (!overrideMap.has(dateKey)) {
         overrideMap.set(dateKey, []);
       }
@@ -355,10 +381,20 @@ export class AvailabilityService {
     });
 
     // Iterate through each date in the range
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      const dateKey = currentDate.toISOString().split('T')[0];
-      const dayOfWeek = currentDate.getDay();
+    // Create dates in local timezone to avoid day-of-week shifts
+    const start = new Date(startDate);
+    start.setHours(12, 0, 0, 0); // Set to noon to avoid timezone edge cases
+    const end = new Date(endDate);
+    end.setHours(12, 0, 0, 0);
+    
+    const currentDate = new Date(start);
+    while (currentDate <= end) {
+      // Format date as YYYY-MM-DD in local timezone
+      const year = currentDate.getFullYear();
+      const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+      const day = String(currentDate.getDate()).padStart(2, '0');
+      const dateKey = `${year}-${month}-${day}`;
+      const dayOfWeek = currentDate.getDay(); // getDay() returns 0-6 (Sunday-Saturday) in local time
 
       // Check for overrides first
       const dayOverrides = overrideMap.get(dateKey) || [];
@@ -366,10 +402,10 @@ export class AvailabilityService {
       if (dayOverrides.length > 0) {
         // Overrides take precedence
         dayOverrides.forEach((override) => {
-          // Handle both Date objects and date strings
-          const overrideDate = override.overrideDate instanceof Date 
-            ? override.overrideDate 
-            : new Date(override.overrideDate);
+          // Create date object from dateKey (already in local timezone format)
+          const [year, month, day] = dateKey.split('-').map(Number);
+          const overrideDate = new Date(year, month - 1, day);
+          
           slots.push({
             date: overrideDate,
             startTime: override.startTime || '00:00',
@@ -490,10 +526,26 @@ export class AvailabilityService {
    * Map database row to AvailabilityOverride
    */
   private mapAvailabilityOverride(row: any): AvailabilityOverride {
+    // Ensure override_date is formatted as YYYY-MM-DD (no time component)
+    let overrideDate: string;
+    if (row.override_date instanceof Date) {
+      // If it's a Date object, format it as YYYY-MM-DD
+      const year = row.override_date.getFullYear();
+      const month = String(row.override_date.getMonth() + 1).padStart(2, '0');
+      const day = String(row.override_date.getDate()).padStart(2, '0');
+      overrideDate = `${year}-${month}-${day}`;
+    } else if (typeof row.override_date === 'string') {
+      // If it's already a string, extract just the date part (YYYY-MM-DD)
+      const dateMatch = row.override_date.match(/^(\d{4}-\d{2}-\d{2})/);
+      overrideDate = dateMatch ? dateMatch[1] : row.override_date;
+    } else {
+      overrideDate = row.override_date;
+    }
+
     return {
       id: row.id,
       userId: row.user_id,
-      overrideDate: row.override_date,
+      overrideDate,
       startTime: row.start_time,
       endTime: row.end_time,
       isBlocked: row.is_blocked,
