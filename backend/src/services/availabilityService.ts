@@ -247,16 +247,8 @@ export class AvailabilityService {
     const values: any[] = [];
     let valueIndex = 1;
 
-    // Handle overrideDate update with proper date normalization
-    if (data.overrideDate) {
-      const dateMatch = data.overrideDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (!dateMatch) {
-        throw new Error('Invalid date format. Expected YYYY-MM-DD');
-      }
-      const overrideDateStr = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
-      updates.push(`override_date = $${valueIndex++}::date`);
-      values.push(overrideDateStr);
-    }
+    // Note: overrideDate is not updatable - delete and recreate if date needs to change
+    // This prevents accidental date shifts and maintains data integrity
 
     if (data.startTime !== undefined) {
       updates.push(`start_time = $${valueIndex++}`);
@@ -360,19 +352,15 @@ export class AvailabilityService {
     // Group overrides by date (use date string directly to avoid timezone issues)
     overrides.forEach((override) => {
       // Extract date string directly (YYYY-MM-DD format)
-      let dateKey: string;
-      if (override.overrideDate instanceof Date) {
-        const year = override.overrideDate.getFullYear();
-        const month = String(override.overrideDate.getMonth() + 1).padStart(2, '0');
-        const day = String(override.overrideDate.getDate()).padStart(2, '0');
-        dateKey = `${year}-${month}-${day}`;
-      } else if (typeof override.overrideDate === 'string') {
-        // Extract YYYY-MM-DD from string
-        const dateMatch = override.overrideDate.match(/^(\d{4}-\d{2}-\d{2})/);
-        dateKey = dateMatch ? dateMatch[1] : override.overrideDate;
-      } else {
-        dateKey = String(override.overrideDate);
-      }
+      // overrideDate is a Date object from the type, but we need to format it as YYYY-MM-DD
+      const overrideDate = override.overrideDate instanceof Date 
+        ? override.overrideDate 
+        : new Date(override.overrideDate);
+      
+      const year = overrideDate.getFullYear();
+      const month = String(overrideDate.getMonth() + 1).padStart(2, '0');
+      const day = String(overrideDate.getDate()).padStart(2, '0');
+      const dateKey = `${year}-${month}-${day}`;
       
       if (!overrideMap.has(dateKey)) {
         overrideMap.set(dateKey, []);
@@ -526,20 +514,24 @@ export class AvailabilityService {
    * Map database row to AvailabilityOverride
    */
   private mapAvailabilityOverride(row: any): AvailabilityOverride {
-    // Ensure override_date is formatted as YYYY-MM-DD (no time component)
-    let overrideDate: string;
+    // Convert override_date to Date object (backend type expects Date)
+    // PostgreSQL returns DATE as a string in YYYY-MM-DD format
+    let overrideDate: Date;
     if (row.override_date instanceof Date) {
-      // If it's a Date object, format it as YYYY-MM-DD
-      const year = row.override_date.getFullYear();
-      const month = String(row.override_date.getMonth() + 1).padStart(2, '0');
-      const day = String(row.override_date.getDate()).padStart(2, '0');
-      overrideDate = `${year}-${month}-${day}`;
-    } else if (typeof row.override_date === 'string') {
-      // If it's already a string, extract just the date part (YYYY-MM-DD)
-      const dateMatch = row.override_date.match(/^(\d{4}-\d{2}-\d{2})/);
-      overrideDate = dateMatch ? dateMatch[1] : row.override_date;
-    } else {
       overrideDate = row.override_date;
+    } else if (typeof row.override_date === 'string') {
+      // Parse YYYY-MM-DD string as local date (not UTC) to avoid timezone shifts
+      const dateMatch = row.override_date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (dateMatch) {
+        const year = parseInt(dateMatch[1], 10);
+        const month = parseInt(dateMatch[2], 10) - 1; // Month is 0-indexed
+        const day = parseInt(dateMatch[3], 10);
+        overrideDate = new Date(year, month, day); // Local date, not UTC
+      } else {
+        overrideDate = new Date(row.override_date);
+      }
+    } else {
+      overrideDate = new Date(row.override_date);
     }
 
     return {
