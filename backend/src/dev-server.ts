@@ -13,6 +13,47 @@ import AuthService from './services/authService';
 import { getDbPool } from './utils/db';
 import { InAppNotifier } from './functions/notifications/inAppNotifier';
 import { requireAuth } from './middleware/auth';
+import { Request, Response, NextFunction } from 'express';
+
+// Express middleware wrapper for requireAuth
+async function requireAuthExpress(req: Request, res: Response, next: NextFunction) {
+  try {
+    // Convert Express request to Lambda event format
+    const event = {
+      httpMethod: req.method,
+      path: req.path,
+      pathParameters: null,
+      queryStringParameters: req.query as any,
+      headers: req.headers as { [key: string]: string },
+      body: req.body ? JSON.stringify(req.body) : null,
+      isBase64Encoded: false,
+      requestContext: {},
+      resource: '',
+      stageVariables: null,
+      multiValueHeaders: {},
+      multiValueQueryStringParameters: null
+    };
+
+    const authResult = await requireAuth(event as any);
+    
+    if (!authResult.authorized) {
+      res.status(authResult.response.statusCode);
+      if (authResult.response.headers) {
+        Object.entries(authResult.response.headers).forEach(([key, value]) => {
+          res.setHeader(key, value as string);
+        });
+      }
+      return res.send(authResult.response.body);
+    }
+
+    // Attach user to request object
+    (req as any).user = authResult.user;
+    next();
+  } catch (error: any) {
+    logger.error('Auth middleware error:', error);
+    res.status(500).json({ error: 'Internal server error', message: error.message });
+  }
+}
 
 // Load environment variables from .env file in backend directory
 // When compiled, __dirname is dist/, so ../.env points to backend/.env
@@ -624,7 +665,7 @@ app.get('/notifications/test', (_req, res) => {
   res.json({ message: 'Notifications routes are working!' });
 });
 
-app.get('/notifications/unread/count', requireAuth, async (req: any, res) => {
+app.get('/notifications/unread/count', requireAuthExpress, async (req: any, res) => {
   try {
     logger.info('Notifications unread count endpoint hit', { userId: req.user?.id });
     const pool = getDbPool();
@@ -641,7 +682,7 @@ app.get('/notifications/unread/count', requireAuth, async (req: any, res) => {
   }
 });
 
-app.get('/notifications/unread', requireAuth, async (req: any, res) => {
+app.get('/notifications/unread', requireAuthExpress, async (req: any, res) => {
   try {
     logger.info('Notifications unread endpoint hit', { userId: req.user?.id });
     const pool = getDbPool();
@@ -655,7 +696,7 @@ app.get('/notifications/unread', requireAuth, async (req: any, res) => {
   }
 });
 
-app.get('/notifications', requireAuth, async (req: any, res) => {
+app.get('/notifications', requireAuthExpress, async (req: any, res) => {
   try {
     logger.info('Notifications endpoint hit', { userId: req.user?.id });
     const pool = getDbPool();
@@ -669,7 +710,7 @@ app.get('/notifications', requireAuth, async (req: any, res) => {
   }
 });
 
-app.put('/notifications/:id/read', requireAuth, async (req: any, res) => {
+app.put('/notifications/:id/read', requireAuthExpress, async (req: any, res) => {
   try {
     const pool = getDbPool();
     const notifier = new InAppNotifier(pool);
@@ -681,7 +722,7 @@ app.put('/notifications/:id/read', requireAuth, async (req: any, res) => {
   }
 });
 
-app.put('/notifications/read-all', requireAuth, async (req: any, res) => {
+app.put('/notifications/read-all', requireAuthExpress, async (req: any, res) => {
   try {
     const pool = getDbPool();
     const notifier = new InAppNotifier(pool);
@@ -693,7 +734,7 @@ app.put('/notifications/read-all', requireAuth, async (req: any, res) => {
   }
 });
 
-app.delete('/notifications/:id', requireAuth, async (req: any, res) => {
+app.delete('/notifications/:id', requireAuthExpress, async (req: any, res) => {
   try {
     const pool = getDbPool();
     const notifier = new InAppNotifier(pool);
