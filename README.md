@@ -14,7 +14,9 @@ An intelligent, automated system that monitors weather conditions for flight tra
 Flight Schedule Pro automatically:
 - **Monitors weather** every 10 minutes at 5 locations (departure, 3 corridor waypoints, arrival)
 - **Detects conflicts** using training-level-specific weather minimums
+- **🤖 Automatically triggers AI rescheduling** when weather gets bad - no manual intervention needed
 - **Generates AI-powered rescheduling options** that consider availability, weather, and training requirements
+- **Notifies users** when reschedule options are ready for review
 - **Manages preferences** with clear instructor priority resolution
 - **Enforces deadlines** with automatic escalation to manual scheduling
 
@@ -29,12 +31,17 @@ Flight Schedule Pro automatically:
   - **Private Pilot:** Visibility >3 mi, ceiling >1000 ft
   - **Instrument Rated:** IMC acceptable, no thunderstorms/icing
 
-### AI-Powered Rescheduling
-- 🤖 LangGraph workflow for complex multi-constraint optimization
+### AI-Powered Automatic Rescheduling
+- 🤖 **Fully Automated:** When weather gets bad, AI automatically generates reschedule options - no manual trigger needed
+- ⚡ **Smart Triggers:** Automatically activates when:
+  - Weather conflict is critical (within 2 hours of flight), OR
+  - Booking has been AT_RISK for >1 hour and flight is within 12 hours
+- 🔄 **LangGraph Workflow:** Complex multi-constraint optimization using AI
 - 📅 7-day rescheduling window from cancellation date
 - ✅ Zero-conflict guarantee (validates against both calendars + existing bookings)
 - 🌤️ Weather forecast validation for all 5 locations per suggestion
 - 🎯 Generates 3 ranked alternative time slots
+- 📧 **Automatic Notifications:** Users are notified when options are ready to review
 
 ### Availability Management
 - 📆 Built-in calendar system for instructors and students
@@ -389,7 +396,28 @@ None yet. See GitHub Issues for current bug tracking.
 
 ---
 
-**Status:** 🚧 Active Development  
+**Status:** ✅ Deployed to Staging (EC2 + S3 + RDS)  
 **Last Updated:** November 2025  
 **Version:** 0.1.0
+
+## 🚀 Current Deployment
+
+### Production Architecture
+- **Backend:** AWS EC2 instance running Node.js/Express with PM2
+- **Frontend:** AWS S3 static website hosting
+- **Database:** AWS RDS PostgreSQL
+- **Authentication:** AWS Cognito
+- **Monitoring:** CloudWatch logs and metrics
+
+### Quick Deployment
+See `docs/deployment_bible.md` for step-by-step deployment instructions.
+
+### Key Features in Production
+- ✅ User registration and authentication (AWS Cognito)
+- ✅ Booking creation and management
+- ✅ Real-time dashboard with actual booking data
+- ✅ Instructor selection dropdown (no UUIDs visible to users)
+- ✅ Weather monitoring and conflict detection
+- ✅ **Automatic AI rescheduling when weather gets bad**
+- ✅ User preference ranking system
 

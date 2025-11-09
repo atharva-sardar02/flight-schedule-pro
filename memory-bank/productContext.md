@@ -9,6 +9,14 @@ Flight training schools face a critical safety and operational challenge:
 - Last-minute cancellations disrupt schedules for both instructors and students
 - Rescheduling requires back-and-forth communication, wasting valuable time
 
+### The Solution
+Flight Schedule Pro **automatically** handles weather conflicts:
+- 🤖 **AI automatically generates reschedule options** when weather gets bad - no manual intervention needed
+- ⚡ Triggers automatically when weather conflict is critical (within 2 hours) or persists (AT_RISK >1 hour)
+- 📧 Users are notified when options are ready to review
+- 🎯 Provides 3 optimal alternative time slots that respect availability and weather conditions
+- ⏱️ Users rank preferences with deadline enforcement
+
 ### Current Pain Points
 1. **Safety Risks:** Students may fly in conditions beyond their training level
 2. **Operational Inefficiency:** Instructors spend hours manually rescheduling
