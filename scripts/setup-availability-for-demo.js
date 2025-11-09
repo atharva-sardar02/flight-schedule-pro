@@ -43,23 +43,24 @@ async function setupAvailability() {
       console.log(`Setting up ${userType} availability...`);
       
       for (const dayOfWeek of days) {
-        // Check if recurring pattern already exists
+        // Check if availability pattern already exists
         const existing = await pool.query(
-          `SELECT id FROM recurring_availability 
+          `SELECT id FROM availability_patterns 
            WHERE user_id = $1 AND day_of_week = $2`,
           [userId, dayOfWeek]
         );
         
         if (existing.rows.length === 0) {
-          // Create recurring availability: 8AM-6PM for all days
+          // Create availability pattern: 8AM-6PM for all days
           await pool.query(
-            `INSERT INTO recurring_availability (user_id, day_of_week, start_time, end_time, is_active, created_at, updated_at)
-             VALUES ($1, $2, '08:00:00', '18:00:00', true, NOW(), NOW())`,
+            `INSERT INTO availability_patterns (user_id, day_of_week, start_time, end_time, is_active, created_at, updated_at)
+             VALUES ($1, $2, '08:00:00', '18:00:00', true, NOW(), NOW())
+             ON CONFLICT (user_id, day_of_week, start_time, end_time) DO NOTHING`,
             [userId, dayOfWeek]
           );
-          console.log(`  ✅ Created recurring availability for ${getDayName(dayOfWeek)}`);
+          console.log(`  ✅ Created availability pattern for ${getDayName(dayOfWeek)}`);
         } else {
-          console.log(`  ⏭️  Recurring availability for ${getDayName(dayOfWeek)} already exists`);
+          console.log(`  ⏭️  Availability pattern for ${getDayName(dayOfWeek)} already exists`);
         }
       }
     }
