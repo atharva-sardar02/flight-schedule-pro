@@ -582,10 +582,21 @@ app.use('/reschedule/:action?/:bookingId?', async (req, res) => {
       }
     }
 
+    // Extract bookingId from params or path
+    let bookingId = req.params.bookingId;
+    if (!bookingId && req.params.action) {
+      // For routes like /reschedule/generate/:bookingId, bookingId might be in the path
+      const pathParts = req.path.split('/').filter(Boolean);
+      const actionIndex = pathParts.indexOf(req.params.action);
+      if (actionIndex >= 0 && actionIndex < pathParts.length - 1) {
+        bookingId = pathParts[actionIndex + 1];
+      }
+    }
+
     const event = {
       httpMethod: req.method,
       path: path,
-      pathParameters: req.params.bookingId ? { bookingId: req.params.bookingId } : null,
+      pathParameters: bookingId ? { bookingId } : null,
       queryStringParameters: req.query,
       headers: req.headers as { [key: string]: string },
       body: req.body ? JSON.stringify(req.body) : null,
