@@ -342,13 +342,55 @@ async function handleConfirmReschedule(
 
     // Resolve final selection using instructor priority
     const preferenceService = new PreferenceRankingService(pool);
-    const selectedOptionId = await preferenceService.resolveFinalSelection(bookingId);
-
-    if (!selectedOptionId) {
+    
+    // Check if both preferences are submitted
+    const bothSubmitted = await preferenceService.areBothPreferencesSubmitted(bookingId);
+    if (!bothSubmitted) {
+      const allPreferences = await preferenceService.getPreferencesByBooking(bookingId);
+      const submittedCount = allPreferences.filter(p => p.submittedAt).length;
+      
+      logInfo('Cannot confirm reschedule - not all preferences submitted', {
+        bookingId,
+        totalPreferences: allPreferences.length,
+        submittedCount,
+      });
+      
       return {
         statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'No preference selected' }),
+        body: JSON.stringify({ 
+          error: 'Both student and instructor must submit their preferences before confirming',
+          submittedCount,
+          requiredCount: 2,
+        }),
+      };
+    }
+    
+    const selectedOptionId = await preferenceService.resolveFinalSelection(bookingId);
+
+    if (!selectedOptionId) {
+      // Get more details for debugging
+      const allPreferences = await preferenceService.getPreferencesByBooking(bookingId);
+      const instructorPref = await preferenceService.getInstructorPreference(bookingId);
+      
+      logError('Failed to resolve final selection', new Error('No option selected'), {
+        bookingId,
+        preferencesCount: allPreferences.length,
+        hasInstructorPref: !!instructorPref,
+        instructorOption1: instructorPref?.option1Id,
+        instructorOption2: instructorPref?.option2Id,
+        instructorOption3: instructorPref?.option3Id,
+      });
+      
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          error: 'No preference selected. The instructor must rank at least one option.',
+          details: instructorPref 
+            ? 'Instructor preference exists but no options were ranked'
+            : 'Instructor preference not found'
+        }),
       };
     }
 

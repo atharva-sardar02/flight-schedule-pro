@@ -237,7 +237,7 @@ export class PreferenceRankingService {
   /**
    * Get instructor's preference for a booking
    */
-  private async getInstructorPreference(bookingId: string): Promise<PreferenceRanking | null> {
+  async getInstructorPreference(bookingId: string): Promise<PreferenceRanking | null> {
     try {
       const result = await this.pool.query(
         `SELECT pr.*

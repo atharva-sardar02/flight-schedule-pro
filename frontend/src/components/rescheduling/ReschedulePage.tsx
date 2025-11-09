@@ -18,6 +18,7 @@ import {
   getRescheduleOptions,
   submitPreference,
   getMyPreference,
+  getPreferences,
   confirmReschedule,
   RescheduleOption,
 } from '../../services/rescheduling';
@@ -42,6 +43,7 @@ export default function ReschedulePage() {
     option3Id?: string;
     unavailableOptionIds: string[];
   } | null>(null);
+  const [waitingForOther, setWaitingForOther] = useState(false);
 
   useEffect(() => {
     if (bookingId) {
@@ -114,6 +116,46 @@ export default function ReschedulePage() {
     }
   };
 
+  // Check if user has already submitted and is waiting for other party
+  useEffect(() => {
+    const checkSubmissionStatus = async () => {
+      if (!bookingId || step !== 'preferences' || options.length === 0) return;
+      
+      try {
+        const allPreferences = await getPreferences(bookingId);
+        const myPreference = allPreferences.find(p => p.submittedAt);
+        const bothSubmitted = allPreferences.length >= 2 && allPreferences.every(p => p.submittedAt);
+        
+        if (myPreference && !bothSubmitted) {
+          setWaitingForOther(true);
+          // Set existing ranking if available
+          if (myPreference.option1Id || myPreference.option2Id || myPreference.option3Id) {
+            setExistingRanking({
+              option1Id: myPreference.option1Id,
+              option2Id: myPreference.option2Id,
+              option3Id: myPreference.option3Id,
+              unavailableOptionIds: myPreference.unavailableOptionIds || [],
+            });
+          }
+        } else if (bothSubmitted && myPreference) {
+          // Both submitted - should move to confirmation
+          const selectedId = myPreference.option1Id || myPreference.option2Id || myPreference.option3Id;
+          if (selectedId) {
+            const selected = options.find((opt) => opt.id === selectedId);
+            if (selected) {
+              setSelectedOption(selected);
+              setStep('confirmation');
+            }
+          }
+        }
+      } catch (err) {
+        // Ignore errors - user might not have submitted yet
+      }
+    };
+    
+    checkSubmissionStatus();
+  }, [bookingId, step, options]);
+
   const handleOptionsLoaded = (loadedOptions: RescheduleOption[]) => {
     setOptions(loadedOptions);
     // Don't automatically move to preferences - let user see options first
@@ -147,7 +189,7 @@ export default function ReschedulePage() {
     try {
       setSubmitting(true);
       setError(null);
-      await submitPreference({
+      const result = await submitPreference({
         bookingId,
         ...ranking,
       });
@@ -159,7 +201,17 @@ export default function ReschedulePage() {
         const selected = options.find((opt) => opt.id === selectedId);
         if (selected) {
           setSelectedOption(selected);
-          setStep('confirmation');
+          
+          // Only move to confirmation if both preferences are submitted
+          if (result.bothSubmitted) {
+            setStep('confirmation');
+            setWaitingForOther(false);
+          } else {
+            // Show success message but stay on preferences step
+            // The user will see a message that they're waiting for the other party
+            setError(null);
+            setWaitingForOther(true);
+          }
         }
       }
     } catch (err: any) {
@@ -309,12 +361,25 @@ export default function ReschedulePage() {
       )}
 
       {step === 'preferences' && options.length > 0 && (
-        <PreferenceRanking
-          options={options}
-          onSubmit={handleSubmitPreferences}
-          loading={submitting}
-          existingRanking={existingRanking || undefined}
-        />
+        <>
+          {waitingForOther && (
+            <Alert className="mb-4 bg-blue-50 border-blue-200">
+              <AlertDescription className="text-blue-800">
+                <p className="font-semibold mb-1">✅ Your preferences have been submitted!</p>
+                <p className="text-sm">
+                  Waiting for the other party (student/instructor) to submit their preferences. 
+                  Once both are submitted, you'll be able to confirm the reschedule.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+          <PreferenceRanking
+            options={options}
+            onSubmit={handleSubmitPreferences}
+            loading={submitting}
+            existingRanking={existingRanking || undefined}
+          />
+        </>
       )}
 
       {step === 'confirmation' && selectedOption && booking && (
