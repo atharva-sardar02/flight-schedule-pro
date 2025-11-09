@@ -498,7 +498,7 @@ async function handleConfirmReschedule(
     // Update booking with new time
     await pool.query(
       `UPDATE bookings
-       SET scheduled_time = $1,
+       SET scheduled_datetime = $1,
            status = 'CONFIRMED',
            updated_at = NOW()
        WHERE id = $2`,
@@ -513,7 +513,7 @@ async function handleConfirmReschedule(
       entityId: bookingId,
       userId: user.id,
       metadata: {
-        oldTime: booking.scheduled_time,
+        oldTime: booking.scheduled_datetime,
         newTime: selectedOption.suggestedDatetime,
         selectedOptionId,
         weatherRevalidated: true,
