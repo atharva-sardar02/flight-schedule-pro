@@ -359,11 +359,18 @@ export class RescheduleEngine {
       // Take top 3
       const top3 = sorted.slice(0, 3);
 
-      const finalOptions: RescheduleOption[] = top3.map((slot, index) => ({
-        datetime: slot.datetime,
-        weatherForecast: slot.weatherData,
-        confidenceScore: (slot.overallScore + slot.weatherConfidence * 10) / 110, // Normalize to 0-1
-      }));
+      const finalOptions: RescheduleOption[] = top3.map((slot, index) => {
+        // Calculate confidence score (0-1), handling NaN cases
+        const weatherConf = slot.weatherConfidence || 70; // Default if undefined
+        const overallScr = slot.overallScore || 50; // Default if undefined
+        const confidenceScore = Math.min(1.0, Math.max(0.0, (overallScr + weatherConf * 10) / 110));
+        
+        return {
+          datetime: slot.datetime,
+          weatherForecast: slot.weatherData || [],
+          confidenceScore,
+        };
+      });
 
       logInfo('Top 3 options selected', {
         bookingId: state.bookingId,

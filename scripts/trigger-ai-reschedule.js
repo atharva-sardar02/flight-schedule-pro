@@ -44,11 +44,33 @@ async function triggerReschedule() {
     console.log(`✅ Generated ${options.length} reschedule options!`);
     console.log('\nOptions:');
     options.forEach((opt, index) => {
+      const confidencePercent = opt.confidenceScore ? (opt.confidenceScore * 100).toFixed(1) : 'N/A';
       console.log(`\n  Option ${index + 1}:`);
       console.log(`    Date/Time: ${opt.datetime}`);
-      console.log(`    Confidence: ${opt.confidenceScore}%`);
-      console.log(`    Weather: ${JSON.stringify(opt.weatherForecast)}`);
+      console.log(`    Confidence: ${confidencePercent}%`);
+      console.log(`    Weather: ${JSON.stringify(opt.weatherForecast || [])}`);
     });
+    
+    // Get booking details for notifications
+    const bookingResult = await pool.query(
+      `SELECT b.*, 
+              u1.email as student_email, 
+              u1.first_name as student_first_name,
+              u2.email as instructor_email,
+              u2.first_name as instructor_first_name
+       FROM bookings b
+       JOIN users u1 ON b.student_id = u1.id
+       JOIN users u2 ON b.instructor_id = u2.id
+       WHERE b.id = $1`,
+      [bookingId]
+    );
+    
+    if (bookingResult.rows.length === 0) {
+      console.error('❌ Booking not found');
+      return;
+    }
+    
+    const booking = bookingResult.rows[0];
     
     // Update booking status to RESCHEDULING
     await pool.query(
@@ -59,7 +81,18 @@ async function triggerReschedule() {
     );
     
     console.log('\n✅ Booking status updated to RESCHEDULING');
-    console.log('📧 Users will be notified about the reschedule options');
+    
+    // Send notifications
+    try {
+      const { NotificationTrigger } = require('../backend/dist/services/notificationTrigger');
+      const notificationTrigger = new NotificationTrigger(pool);
+      
+      await notificationTrigger.triggerRescheduleOptionsAvailable(booking, options.length);
+      console.log('📧 Notifications sent to student and instructor');
+    } catch (notifError) {
+      console.warn('⚠️  Failed to send notifications:', notifError.message);
+      console.log('   (Notifications are optional - reschedule options were still generated)');
+    }
     
   } catch (error) {
     console.error('❌ Error:', error.message);
