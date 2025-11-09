@@ -51,29 +51,6 @@ export class AuthService {
    * Login user with email and password
    */
   static async login(credentials: LoginRequest): Promise<AuthTokens> {
-    // Mock authentication for testing (when MOCK_AUTH is enabled)
-    if (process.env.MOCK_AUTH === 'true') {
-      logger.info('Using mock authentication for local development', { email: credentials.email });
-      
-      // Generate mock tokens (simple base64 encoded JSON)
-      const mockUser = {
-        sub: 'mock-user-id',
-        email: credentials.email,
-        'cognito:groups': ['STUDENT'],
-        exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour
-      };
-      
-      const mockAccessToken = Buffer.from(JSON.stringify(mockUser)).toString('base64');
-      const mockIdToken = Buffer.from(JSON.stringify({ ...mockUser, 'cognito:username': credentials.email })).toString('base64');
-      
-      return {
-        accessToken: `mock.${mockAccessToken}.token`,
-        idToken: `mock.${mockIdToken}.token`,
-        refreshToken: 'mock-refresh-token',
-        expiresIn: 3600,
-      };
-    }
-
     try {
       const command = new InitiateAuthCommand({
         AuthFlow: 'USER_PASSWORD_AUTH',
@@ -106,19 +83,6 @@ export class AuthService {
    * Register new user
    */
   static async register(data: RegisterRequest): Promise<{ userId: string; email: string }> {
-    // Mock registration for testing (when MOCK_AUTH is enabled)
-    if (process.env.MOCK_AUTH === 'true') {
-      logger.info('Using mock registration for local development', { email: data.email });
-      
-      // Generate a mock user ID
-      const mockUserId = `mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      return {
-        userId: mockUserId,
-        email: data.email,
-      };
-    }
-
     try {
       // Sign up user in Cognito
       const signUpCommand = new SignUpCommand({
@@ -180,35 +144,6 @@ export class AuthService {
    * Verify user JWT token and extract user information
    */
   static async verifyToken(accessToken: string): Promise<User> {
-    // Mock token verification for local development
-    if (process.env.MOCK_AUTH === 'true') {
-      if (accessToken.startsWith('mock.')) {
-        try {
-          // Extract the base64 part from mock token
-          const parts = accessToken.split('.');
-          if (parts.length === 3 && parts[1]) {
-            const decoded = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-            
-            logger.info('Using mock token verification', { email: decoded.email });
-            
-            return {
-              id: decoded.sub || 'mock-user-id',
-              email: decoded.email || 'test@example.com',
-              firstName: 'Test',
-              lastName: 'User',
-              role: (decoded['cognito:groups']?.[0] || 'STUDENT') as UserRole,
-              trainingLevel: undefined,
-              phoneNumber: undefined,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            };
-          }
-        } catch (error) {
-          logger.warn('Failed to decode mock token', { error });
-        }
-      }
-    }
-
     try {
       const command = new GetUserCommand({
         AccessToken: accessToken,

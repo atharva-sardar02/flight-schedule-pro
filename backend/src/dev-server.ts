@@ -21,7 +21,6 @@ console.log('='.repeat(80));
 console.log('🔧 Environment Configuration Check');
 console.log('='.repeat(80));
 console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
-console.log('MOCK_AUTH:', process.env.MOCK_AUTH || 'false');
 console.log('AWS_REGION:', process.env.AWS_REGION);
 console.log('COGNITO_USER_POOL_ID:', process.env.COGNITO_USER_POOL_ID);
 console.log('COGNITO_CLIENT_ID:', process.env.COGNITO_CLIENT_ID ? '✅ Set' : '❌ Not Set');
