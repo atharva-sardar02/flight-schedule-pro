@@ -219,6 +219,17 @@ async function handleRecurringAvailability(
 // AVAILABILITY OVERRIDE HANDLERS
 // ============================================================================
 
+/**
+ * Format override date as YYYY-MM-DD string using local date components
+ * This prevents timezone shifts when serializing to JSON
+ */
+function formatOverrideDate(overrideDate: Date): string {
+  const year = overrideDate.getFullYear();
+  const month = String(overrideDate.getMonth() + 1).padStart(2, '0');
+  const day = String(overrideDate.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 async function handleAvailabilityOverrides(
   event: APIGatewayProxyEvent,
   user: any,
@@ -245,28 +256,11 @@ async function handleAvailabilityOverrides(
       const overrides = await service.getAvailabilityOverrides(user.id, startDate, endDate);
       
       // Format override dates as YYYY-MM-DD strings (not ISO strings) to avoid timezone shifts
-      const formattedOverrides = overrides.map((override) => {
-        let overrideDateStr: string;
-        if (override.overrideDate instanceof Date) {
-          // Format as YYYY-MM-DD using local date components, not UTC
-          const year = override.overrideDate.getFullYear();
-          const month = String(override.overrideDate.getMonth() + 1).padStart(2, '0');
-          const day = String(override.overrideDate.getDate()).padStart(2, '0');
-          overrideDateStr = `${year}-${month}-${day}`;
-        } else if (typeof override.overrideDate === 'string') {
-          // Extract YYYY-MM-DD from string (in case it's an ISO string)
-          const dateMatch = override.overrideDate.match(/^(\d{4}-\d{2}-\d{2})/);
-          overrideDateStr = dateMatch ? dateMatch[1] : override.overrideDate;
-        } else {
-          overrideDateStr = String(override.overrideDate);
-        }
-        
-        return {
-          ...override,
-          overrideDate: overrideDateStr,
-          createdAt: override.createdAt instanceof Date ? override.createdAt.toISOString() : override.createdAt,
-        };
-      });
+      const formattedOverrides = overrides.map((override) => ({
+        ...override,
+        overrideDate: formatOverrideDate(override.overrideDate),
+        createdAt: override.createdAt instanceof Date ? override.createdAt.toISOString() : override.createdAt,
+      }));
       
       return {
         statusCode: 200,
@@ -279,26 +273,12 @@ async function handleAvailabilityOverrides(
       const createData = JSON.parse(event.body || '{}');
       const newOverride = await service.createAvailabilityOverride(user.id, createData);
       
-      // Format overrideDate as YYYY-MM-DD string to avoid timezone shifts
-      let overrideDateStr: string;
-      if (newOverride.overrideDate instanceof Date) {
-        const year = newOverride.overrideDate.getFullYear();
-        const month = String(newOverride.overrideDate.getMonth() + 1).padStart(2, '0');
-        const day = String(newOverride.overrideDate.getDate()).padStart(2, '0');
-        overrideDateStr = `${year}-${month}-${day}`;
-      } else if (typeof newOverride.overrideDate === 'string') {
-        const dateMatch = newOverride.overrideDate.match(/^(\d{4}-\d{2}-\d{2})/);
-        overrideDateStr = dateMatch ? dateMatch[1] : newOverride.overrideDate;
-      } else {
-        overrideDateStr = String(newOverride.overrideDate);
-      }
-      
       return {
         statusCode: 201,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...newOverride,
-          overrideDate: overrideDateStr,
+          overrideDate: formatOverrideDate(newOverride.overrideDate),
           createdAt: newOverride.createdAt instanceof Date ? newOverride.createdAt.toISOString() : newOverride.createdAt,
         }),
       };
@@ -319,26 +299,12 @@ async function handleAvailabilityOverrides(
         updateData
       );
       
-      // Format overrideDate as YYYY-MM-DD string to avoid timezone shifts
-      let overrideDateStr: string;
-      if (updatedOverride.overrideDate instanceof Date) {
-        const year = updatedOverride.overrideDate.getFullYear();
-        const month = String(updatedOverride.overrideDate.getMonth() + 1).padStart(2, '0');
-        const day = String(updatedOverride.overrideDate.getDate()).padStart(2, '0');
-        overrideDateStr = `${year}-${month}-${day}`;
-      } else if (typeof updatedOverride.overrideDate === 'string') {
-        const dateMatch = updatedOverride.overrideDate.match(/^(\d{4}-\d{2}-\d{2})/);
-        overrideDateStr = dateMatch ? dateMatch[1] : updatedOverride.overrideDate;
-      } else {
-        overrideDateStr = String(updatedOverride.overrideDate);
-      }
-      
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...updatedOverride,
-          overrideDate: overrideDateStr,
+          overrideDate: formatOverrideDate(updatedOverride.overrideDate),
           createdAt: updatedOverride.createdAt instanceof Date ? updatedOverride.createdAt.toISOString() : updatedOverride.createdAt,
         }),
       };
@@ -422,28 +388,11 @@ async function handleGetAvailability(
         createdAt: pattern.createdAt instanceof Date ? pattern.createdAt.toISOString() : pattern.createdAt,
         updatedAt: pattern.updatedAt instanceof Date ? pattern.updatedAt.toISOString() : pattern.updatedAt,
       })),
-      overrides: availability.overrides.map((override) => {
-        // Format overrideDate as YYYY-MM-DD using local date components, not UTC
-        let overrideDateStr: string;
-        if (override.overrideDate instanceof Date) {
-          const year = override.overrideDate.getFullYear();
-          const month = String(override.overrideDate.getMonth() + 1).padStart(2, '0');
-          const day = String(override.overrideDate.getDate()).padStart(2, '0');
-          overrideDateStr = `${year}-${month}-${day}`;
-        } else if (typeof override.overrideDate === 'string') {
-          // Extract YYYY-MM-DD from string (in case it's an ISO string)
-          const dateMatch = override.overrideDate.match(/^(\d{4}-\d{2}-\d{2})/);
-          overrideDateStr = dateMatch ? dateMatch[1] : override.overrideDate;
-        } else {
-          overrideDateStr = String(override.overrideDate);
-        }
-        
-        return {
-          ...override,
-          overrideDate: overrideDateStr,
-          createdAt: override.createdAt instanceof Date ? override.createdAt.toISOString() : override.createdAt,
-        };
-      }),
+      overrides: availability.overrides.map((override) => ({
+        ...override,
+        overrideDate: formatOverrideDate(override.overrideDate),
+        createdAt: override.createdAt instanceof Date ? override.createdAt.toISOString() : override.createdAt,
+      })),
     };
 
     return {
