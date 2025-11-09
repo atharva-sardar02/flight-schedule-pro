@@ -132,10 +132,12 @@ export class BookingService {
 
         return this.mapRowToBooking(result.rows[0]);
       } catch (dbError) {
-        // If weather check fails, still create booking but log error
-        logger.error('Weather validation failed during booking creation', {
-          error: weatherError instanceof Error ? weatherError.message : 'Unknown',
+        // Database error - rollback and throw
+        await client.query('ROLLBACK');
+        logger.error('Database error during booking creation', {
+          error: dbError instanceof Error ? dbError.message : 'Unknown',
         });
+        throw dbError;
 
         // Create booking with CONFIRMED status (weather will be checked by scheduler)
         const result = await client.query(
