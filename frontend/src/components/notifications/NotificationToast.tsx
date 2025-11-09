@@ -78,8 +78,12 @@ export function NotificationToast() {
       await markAsRead(currentNotification.id);
       
       // Navigate to reschedule page if it's a reschedule notification
+      // Route is /bookings/:bookingId/reschedule (HashRouter compatible)
       if (currentNotification.bookingId && currentNotification.type === 'OPTIONS_AVAILABLE') {
-        navigate(`/reschedule/${currentNotification.bookingId}`);
+        navigate(`/bookings/${currentNotification.bookingId}/reschedule`);
+      } else if (currentNotification.bookingId) {
+        // For other notification types, go to booking details
+        navigate(`/bookings/${currentNotification.bookingId}`);
       }
     }
     setShowToast(false);
