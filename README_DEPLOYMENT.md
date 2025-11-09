@@ -2,15 +2,32 @@
 
 This project uses a straightforward deployment architecture:
 
-- **Backend**: EC2 instance running Express/Node.js
+- **Backend**: EC2 instance running Express/Node.js with PM2
 - **Frontend**: S3 bucket with static website hosting
 - **Database**: AWS RDS PostgreSQL
 
-## Quick Start
+## 🚀 Quick Deployment Commands
 
-1. **Read the full guide**: See `docs/SIMPLE_DEPLOYMENT.md` for complete instructions
-2. **Deploy backend**: Follow EC2 setup steps
-3. **Deploy frontend**: Use `scripts/deploy-frontend.sh` or `scripts/deploy-frontend.ps1`
+**For quick reference, see:** [`DEPLOY_COMMANDS.md`](./DEPLOY_COMMANDS.md)
+
+### Backend Deployment (EC2)
+
+SSH to EC2, then:
+```bash
+cd ~/flight-schedule-pro
+git pull
+cd backend
+npm run build
+pm2 restart flight-api
+```
+
+### Frontend Deployment (Local)
+
+From your local machine:
+```powershell
+cd D:\gauntlet-ai\flight-schedule-pro
+.\scripts\deploy-frontend.ps1 -EC2IP 3.87.74.62 -S3Bucket flight-schedule-pro-frontend
+```
 
 ## Architecture
 
@@ -20,6 +37,7 @@ Frontend (S3) → Backend (EC2) → Database (RDS)
 
 ## Key Files
 
+- **`DEPLOY_COMMANDS.md`** - ⚡ Quick reference for deployment commands
 - `docs/SIMPLE_DEPLOYMENT.md` - Complete deployment guide
 - `scripts/deploy-frontend.sh` - Frontend deployment script (Linux/Mac)
 - `scripts/deploy-frontend.ps1` - Frontend deployment script (Windows)
@@ -63,11 +81,19 @@ VITE_API_BASE_URL=http://your-ec2-ip:3001
 
 ### Backend (on EC2)
 
+**After making changes:**
 ```bash
-# Start
-pm2 start src/dev-server.ts --name flight-api --interpreter ts-node
+cd ~/flight-schedule-pro
+git pull
+cd backend
+npm run build
+pm2 restart flight-api
+```
 
-# Or build first
+**Initial setup (one-time):**
+```bash
+# Build and start
+cd ~/flight-schedule-pro/backend
 npm run build
 pm2 start dist/dev-server.js --name flight-api
 
@@ -78,13 +104,19 @@ pm2 startup
 
 ### Frontend (from local machine)
 
-```bash
-# Linux/Mac
-./scripts/deploy-frontend.sh <EC2-IP> <S3-BUCKET>
-
-# Windows
-.\scripts\deploy-frontend.ps1 -EC2IP <EC2-IP> -S3Bucket <S3-BUCKET>
+**Windows:**
+```powershell
+cd D:\gauntlet-ai\flight-schedule-pro
+.\scripts\deploy-frontend.ps1 -EC2IP 3.87.74.62 -S3Bucket flight-schedule-pro-frontend
 ```
+
+**Linux/Mac:**
+```bash
+cd ~/flight-schedule-pro
+./scripts/deploy-frontend.sh 3.87.74.62 flight-schedule-pro-frontend
+```
+
+**See [`DEPLOY_COMMANDS.md`](./DEPLOY_COMMANDS.md) for quick reference.**
 
 ## Troubleshooting
 

@@ -238,28 +238,37 @@ npm run test:coverage
 
 ## 🚢 Deployment
 
-### Staging Deployment
+### Quick Deployment
 
+**For quick reference, see:** [`DEPLOY_COMMANDS.md`](./DEPLOY_COMMANDS.md)
+
+**Backend (EC2):**
 ```bash
-./infrastructure/scripts/deploy-staging.sh
+cd ~/flight-schedule-pro
+git pull
+cd backend
+npm run build
+pm2 restart flight-api
 ```
 
-This will:
-1. Validate CloudFormation templates
-2. Deploy infrastructure stack
-3. Run database migrations
-4. Deploy Lambda functions
-5. Deploy frontend to S3/CloudFront
-
-### Production Deployment
-
-```bash
-./infrastructure/scripts/deploy-production.sh
+**Frontend (Local):**
+```powershell
+cd D:\gauntlet-ai\flight-schedule-pro
+.\scripts\deploy-frontend.ps1 -EC2IP 3.87.74.62 -S3Bucket flight-schedule-pro-frontend
 ```
 
-**Note:** Production deployment requires manual approval and follows blue/green deployment strategy.
+### Current Production Architecture
 
-See `docs/DEPLOYMENT.md` for detailed deployment guide.
+- **Backend:** AWS EC2 instance (3.87.74.62:3001) running Node.js/Express with PM2
+- **Frontend:** AWS S3 static website (`flight-schedule-pro-frontend`)
+- **Database:** AWS RDS PostgreSQL
+- **Authentication:** AWS Cognito
+
+### Detailed Guides
+
+- **Quick Commands:** [`DEPLOY_COMMANDS.md`](./DEPLOY_COMMANDS.md) - ⚡ Quick reference
+- **Simple Deployment:** [`README_DEPLOYMENT.md`](./README_DEPLOYMENT.md) - Overview and setup
+- **Full Guide:** `docs/SIMPLE_DEPLOYMENT.md` - Complete step-by-step instructions
 
 ## 📊 Monitoring
 
@@ -412,7 +421,9 @@ None yet. See GitHub Issues for current bug tracking.
 - **Monitoring:** CloudWatch logs and metrics
 
 ### Quick Deployment
-See `docs/deployment_bible.md` for step-by-step deployment instructions.
+- **Quick Commands:** [`DEPLOY_COMMANDS.md`](./DEPLOY_COMMANDS.md) - ⚡ Copy-paste deployment commands
+- **Deployment Guide:** [`README_DEPLOYMENT.md`](./README_DEPLOYMENT.md) - Simple deployment overview
+- **Full Guide:** `docs/SIMPLE_DEPLOYMENT.md` - Complete deployment instructions
 
 ### Key Features in Production
 - ✅ User registration and authentication (AWS Cognito)
