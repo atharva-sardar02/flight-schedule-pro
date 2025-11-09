@@ -629,32 +629,34 @@ app.use('/reschedule/:action?/:bookingId?', async (req, res) => {
 });
 
 // Preferences Routes
-// Use a wildcard pattern to match all /preferences/* routes
-app.all('/preferences*', async (req, res) => {
+// Match all /preferences/* routes using use() with a path prefix
+app.use('/preferences', async (req, res) => {
   try {
-    // Use the actual request path
-    const path = req.path;
+    // When using app.use('/preferences', ...), Express strips the prefix from req.path
+    // So req.path for /preferences/my/123 would be /my/123
+    // We need to reconstruct the full path
+    const fullPath = `/preferences${req.path === '/' ? '' : req.path}`;
     
     // Extract bookingId from path segments
-    const pathParts = req.path.split('/').filter(Boolean);
+    const pathParts = fullPath.split('/').filter(Boolean);
     let bookingId: string | null = null;
     
     // Check for bookingId in various patterns:
     // /preferences/my/:bookingId
     // /preferences/booking/:bookingId
     // /preferences/escalate/:bookingId
-    if (pathParts.length >= 3) {
+    if (pathParts.length >= 3 && pathParts[0] === 'preferences') {
       // bookingId is the last segment
-      bookingId = pathParts[pathParts.length - 1];
+      const lastSegment = pathParts[pathParts.length - 1];
       // Validate it's a UUID (basic check)
-      if (!bookingId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-        bookingId = null;
+      if (lastSegment.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        bookingId = lastSegment;
       }
     }
 
     const event = {
       httpMethod: req.method,
-      path: path,
+      path: fullPath,
       pathParameters: bookingId ? { bookingId } : null,
       queryStringParameters: req.query,
       headers: req.headers as { [key: string]: string },
