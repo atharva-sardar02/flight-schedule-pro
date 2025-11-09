@@ -22,7 +22,8 @@ export interface Notification {
  */
 export const getNotifications = async (): Promise<Notification[]> => {
   const response = await api.get('/notifications');
-  return response.data;
+  // Backend returns array directly, but ensure it's an array
+  return Array.isArray(response.data) ? response.data : [];
 };
 
 /**

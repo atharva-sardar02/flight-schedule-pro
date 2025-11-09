@@ -11,6 +11,8 @@ import { preferencesHandler } from './functions/api/preferences';
 import { AdminConfirmSignUpCommand, CognitoIdentityProviderClient } from '@aws-sdk/client-cognito-identity-provider';
 import AuthService from './services/authService';
 import { getDbPool } from './utils/db';
+import { InAppNotifier } from './functions/notifications/inAppNotifier';
+import { requireAuth } from './middleware/auth';
 
 // Load environment variables from .env file in backend directory
 // When compiled, __dirname is dist/, so ../.env points to backend/.env
@@ -611,6 +613,79 @@ app.use('/preferences/:action?/:bookingId?', async (req, res) => {
   } catch (error) {
     logger.error('Preferences route error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Notifications Routes
+app.get('/notifications', requireAuth, async (req: any, res) => {
+  try {
+    const pool = getDbPool();
+    const notifier = new InAppNotifier(pool);
+    const notifications = await notifier.getNotifications(req.user.id, 50);
+    res.json(notifications);
+  } catch (error: any) {
+    logger.error('Get notifications error:', error);
+    res.status(500).json({ error: 'Failed to get notifications', message: error.message });
+  }
+});
+
+app.get('/notifications/unread', requireAuth, async (req: any, res) => {
+  try {
+    const pool = getDbPool();
+    const notifier = new InAppNotifier(pool);
+    const notifications = await notifier.getUnreadNotifications(req.user.id);
+    res.json(notifications);
+  } catch (error: any) {
+    logger.error('Get unread notifications error:', error);
+    res.status(500).json({ error: 'Failed to get unread notifications', message: error.message });
+  }
+});
+
+app.get('/notifications/unread/count', requireAuth, async (req: any, res) => {
+  try {
+    const pool = getDbPool();
+    const notifier = new InAppNotifier(pool);
+    const count = await notifier.getUnreadCount(req.user.id);
+    res.json({ count });
+  } catch (error: any) {
+    logger.error('Get unread count error:', error);
+    res.status(500).json({ error: 'Failed to get unread count', message: error.message });
+  }
+});
+
+app.put('/notifications/:id/read', requireAuth, async (req: any, res) => {
+  try {
+    const pool = getDbPool();
+    const notifier = new InAppNotifier(pool);
+    await notifier.markAsRead(req.params.id, req.user.id);
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Mark as read error:', error);
+    res.status(500).json({ error: 'Failed to mark as read', message: error.message });
+  }
+});
+
+app.put('/notifications/read-all', requireAuth, async (req: any, res) => {
+  try {
+    const pool = getDbPool();
+    const notifier = new InAppNotifier(pool);
+    await notifier.markAllAsRead(req.user.id);
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Mark all as read error:', error);
+    res.status(500).json({ error: 'Failed to mark all as read', message: error.message });
+  }
+});
+
+app.delete('/notifications/:id', requireAuth, async (req: any, res) => {
+  try {
+    const pool = getDbPool();
+    const notifier = new InAppNotifier(pool);
+    await notifier.deleteNotification(req.params.id, req.user.id);
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Delete notification error:', error);
+    res.status(500).json({ error: 'Failed to delete notification', message: error.message });
   }
 });
 

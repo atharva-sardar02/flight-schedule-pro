@@ -219,18 +219,9 @@ export class NotificationTrigger {
         message: studentMessage,
       });
 
-      // Send email to student
-      await this.emailService.sendOptionsAvailable(
-        booking.student_email,
-        booking.student_first_name,
-        {
-          originalTime: scheduledTime,
-          departureAirport: booking.departure_airport,
-          arrivalAirport: booking.arrival_airport,
-          optionsCount,
-          deadline,
-        }
-      );
+      // Skip email - only use in-app notifications
+      // Email sending disabled for demo/production simplicity
+      // await this.emailService.sendOptionsAvailable(...)
 
       // Notify instructor
       const instructorMessage = `Our AI has automatically generated ${optionsCount} rescheduling options for the flight with ${booking.student_first_name} due to weather conditions.\n\n` +
@@ -247,18 +238,9 @@ export class NotificationTrigger {
         message: instructorMessage,
       });
 
-      // Send email to instructor
-      await this.emailService.sendOptionsAvailable(
-        booking.instructor_email,
-        booking.instructor_first_name,
-        {
-          originalTime: scheduledTime,
-          departureAirport: booking.departure_airport,
-          arrivalAirport: booking.arrival_airport,
-          optionsCount,
-          deadline,
-        }
-      );
+      // Skip email - only use in-app notifications
+      // Email sending disabled for demo/production simplicity
+      // await this.emailService.sendOptionsAvailable(...)
 
       logInfo('Reschedule options available notifications triggered', {
         bookingId: booking.id,

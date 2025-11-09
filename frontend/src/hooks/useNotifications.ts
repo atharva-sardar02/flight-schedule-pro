@@ -24,14 +24,16 @@ export const useNotifications = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (): Promise<Notification[]> => {
     setLoading(true);
     setError(null);
     try {
       const data = await notificationService.getNotifications();
       setNotifications(data);
+      return data;
     } catch (err: any) {
       setError(err.message || 'Failed to fetch notifications');
+      return [];
     } finally {
       setLoading(false);
     }

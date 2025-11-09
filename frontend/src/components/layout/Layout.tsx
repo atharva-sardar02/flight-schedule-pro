@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { NotificationToast } from '@/components/notifications/NotificationToast';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -159,6 +160,9 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Main Content */}
       <main>{children}</main>
+      
+      {/* Notification Toast */}
+      <NotificationToast />
     </div>
   );
 }
