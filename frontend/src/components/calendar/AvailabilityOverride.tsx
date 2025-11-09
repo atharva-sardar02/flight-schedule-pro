@@ -34,7 +34,23 @@ export const AvailabilityOverride: React.FC = () => {
   });
 
   // Helper to format date in local timezone (YYYY-MM-DD)
-  const formatDateLocal = (date: Date): string => {
+  // Handles both Date objects and date strings
+  const formatDateLocal = (input: Date | string): string => {
+    let date: Date;
+    
+    if (input instanceof Date) {
+      date = input;
+    } else if (typeof input === 'string') {
+      // If it's already in YYYY-MM-DD format, use it directly
+      if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
+        return input;
+      }
+      // Otherwise, parse the string
+      date = new Date(input);
+    } else {
+      date = new Date(input);
+    }
+    
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -82,20 +98,6 @@ export const AvailabilityOverride: React.FC = () => {
         // Error handled by hook
       }
     }
-  };
-
-  // Helper to format date in local timezone (YYYY-MM-DD)
-  const formatDateLocal = (dateString: string): string => {
-    // If it's already in YYYY-MM-DD format, use it directly
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-      return dateString;
-    }
-    // Otherwise, parse and format
-    const d = new Date(dateString);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
   };
 
   const formatDate = (dateString: string) => {

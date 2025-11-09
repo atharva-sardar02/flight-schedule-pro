@@ -48,7 +48,19 @@ export const RecurringAvailability: React.FC<RecurringAvailabilityProps> = ({ on
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createRecurringPattern(formData);
+      // Ensure dayOfWeek is a valid number (0-6)
+      const dayOfWeek = typeof formData.dayOfWeek === 'number' 
+        ? formData.dayOfWeek 
+        : parseInt(String(formData.dayOfWeek), 10);
+      
+      if (isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
+        throw new Error('Invalid day of week selected');
+      }
+      
+      await createRecurringPattern({
+        ...formData,
+        dayOfWeek,
+      });
       setShowForm(false);
       setFormData({ dayOfWeek: DayOfWeek.MONDAY, startTime: '09:00', endTime: '17:00' });
       // Refresh calendar view if user is available
@@ -129,17 +141,23 @@ export const RecurringAvailability: React.FC<RecurringAvailabilityProps> = ({ on
                   id="dayOfWeek"
                   value={formData.dayOfWeek}
                   onChange={(e) =>
-                    setFormData({ ...formData, dayOfWeek: parseInt(e.target.value) })
+                    setFormData({ ...formData, dayOfWeek: parseInt(e.target.value, 10) })
                   }
                   className="w-full p-2 border rounded"
                 >
-                  {Object.entries(DayOfWeek)
-                    .filter(([key, value]) => typeof value === 'number')
-                    .map(([key, value]) => (
-                      <option key={value} value={value}>
-                        {getDayName(value as DayOfWeek)}
-                      </option>
-                    ))}
+                  {[
+                    { value: DayOfWeek.SUNDAY, label: 'Sunday' },
+                    { value: DayOfWeek.MONDAY, label: 'Monday' },
+                    { value: DayOfWeek.TUESDAY, label: 'Tuesday' },
+                    { value: DayOfWeek.WEDNESDAY, label: 'Wednesday' },
+                    { value: DayOfWeek.THURSDAY, label: 'Thursday' },
+                    { value: DayOfWeek.FRIDAY, label: 'Friday' },
+                    { value: DayOfWeek.SATURDAY, label: 'Saturday' },
+                  ].map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
               </div>
 
