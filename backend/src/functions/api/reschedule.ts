@@ -545,7 +545,7 @@ async function handleConfirmReschedule(
 
     // Only block if weather is explicitly invalid (not on timeout or error)
     if (!weatherValid.isValid && weatherValid.reason !== 'Weather check timed out - proceeding' && weatherValid.reason !== 'Weather check failed - proceeding with confirmation') {
-      logInfo('Weather re-validation failed - option no longer suitable', {
+      logInfo('Weather re-validation failed - automatically regenerating options', {
         bookingId,
         newTime: selectedOption.suggestedDatetime,
         reason: weatherValid.reason,
@@ -563,19 +563,82 @@ async function handleConfirmReschedule(
           newTime: selectedOption.suggestedDatetime,
           reason: weatherValid.reason,
           weatherValid: weatherValid.isValid,
+          action: 'auto_regenerating_options',
         },
       });
 
-      return {
-        statusCode: 409,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          error: 'Weather conditions no longer suitable',
-          reason: weatherValid.reason,
-          weatherValid: weatherValid.isValid,
-          requiresNewOptions: true,
-        }),
-      };
+      // AUTOMATICALLY REGENERATE OPTIONS using AI
+      try {
+        logInfo('Auto-regenerating reschedule options due to weather conflict', { bookingId });
+        
+        // Delete old options and preferences
+        await optionsService.deleteOptionsByBooking(bookingId);
+        
+        // Delete old preferences
+        await pool.query(
+          'DELETE FROM preference_rankings WHERE booking_id = $1',
+          [bookingId]
+        );
+        
+        // Generate new options using AI
+        const rescheduleEngine = new RescheduleEngine(pool);
+        await rescheduleEngine.generateRescheduleOptions(bookingId);
+        
+        // Fetch the newly generated options
+        const newOptions = await optionsService.getOptionsByBooking(bookingId);
+        
+        // Create new preference rankings for the new options
+        const scheduledTime = new Date(booking.scheduled_datetime);
+        const preferenceService = new PreferenceRankingService(pool);
+        
+        await preferenceService.createPreferenceRankings(
+          bookingId,
+          booking.student_id,
+          booking.instructor_id,
+          scheduledTime
+        );
+        
+        logInfo('New reschedule options generated automatically', {
+          bookingId,
+          optionsCount: newOptions.length,
+        });
+
+        // Trigger notification that new options are available
+        try {
+          const { NotificationTrigger } = require('../services/notificationTrigger');
+          const notificationTrigger = new NotificationTrigger(pool);
+          await notificationTrigger.triggerRescheduleOptionsAvailable(booking, newOptions.length);
+        } catch (notifError) {
+          logError('Failed to send notification for new options', notifError, { bookingId });
+        }
+
+        return {
+          statusCode: 409,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Weather conditions no longer suitable',
+            reason: weatherValid.reason,
+            requiresNewOptions: true,
+            newOptionsGenerated: true,
+            message: 'New reschedule options have been automatically generated. Please review and submit your preferences again.',
+            optionsCount: newOptions.length,
+          }),
+        };
+      } catch (regenerateError: any) {
+        logError('Failed to auto-regenerate options', regenerateError, { bookingId });
+        
+        return {
+          statusCode: 409,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Weather conditions no longer suitable',
+            reason: weatherValid.reason,
+            requiresNewOptions: true,
+            newOptionsGenerated: false,
+            message: 'Weather validation failed. Please manually generate new options.',
+          }),
+        };
+      }
     }
 
     logInfo('Weather re-validation passed - proceeding with confirmation', {

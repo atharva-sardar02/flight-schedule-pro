@@ -105,6 +105,9 @@ export async function confirmReschedule(bookingId: string): Promise<{
   notificationsSent?: boolean;
   error?: string;
   requiresNewOptions?: boolean;
+  newOptionsGenerated?: boolean;
+  message?: string;
+  optionsCount?: number;
 }> {
   try {
     const response = await api.post(`/reschedule/confirm/${bookingId}`);
@@ -114,11 +117,14 @@ export async function confirmReschedule(bookingId: string): Promise<{
     };
   } catch (error: any) {
     if (error.response?.status === 409) {
-      // Weather re-validation failed
+      // Weather re-validation failed - may have auto-generated new options
       return {
         success: false,
         error: error.response.data.error || 'Weather conditions no longer suitable',
         requiresNewOptions: error.response.data.requiresNewOptions || false,
+        newOptionsGenerated: error.response.data.newOptionsGenerated || false,
+        message: error.response.data.message,
+        optionsCount: error.response.data.optionsCount,
       };
     }
     return {

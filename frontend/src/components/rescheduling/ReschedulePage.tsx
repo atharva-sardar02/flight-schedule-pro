@@ -239,8 +239,37 @@ export default function ReschedulePage() {
         return { success: true };
       } else {
         if (result.requiresNewOptions) {
-          setError(result.error || 'Weather conditions have changed. Please generate new options.');
-          setStep('options');
+          // Check if new options were automatically generated
+          if (result.newOptionsGenerated) {
+            // Clear existing state
+            setOptions([]);
+            setSelectedOption(null);
+            setExistingRanking(null);
+            setWaitingForOther(false);
+            
+            // Show success message
+            setError(null);
+            
+            // Reload options automatically
+            try {
+              const newOptions = await getRescheduleOptions(bookingId);
+              handleOptionsLoaded(newOptions);
+              
+              // Show message that new options are available
+              const message = result.message || `New reschedule options have been automatically generated (${result.optionsCount || newOptions.length} options). Please review and submit your preferences again.`;
+              setError(message);
+              
+              // Move to options step to show the new options
+              setStep('options');
+            } catch (loadError: any) {
+              setError(result.message || 'New options were generated. Please refresh the page to see them.');
+              setStep('options');
+            }
+          } else {
+            // Manual regeneration required
+            setError(result.error || 'Weather conditions have changed. Please generate new options.');
+            setStep('options');
+          }
           return { success: false, error: result.error, requiresNewOptions: true };
         } else {
           setError(result.error || 'Failed to confirm reschedule');
