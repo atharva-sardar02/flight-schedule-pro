@@ -230,6 +230,7 @@ export function isRetryableError(error: unknown): boolean {
 
 /**
  * Show user-friendly error notification
+ * This will be used by components to show toast notifications
  */
 export function showErrorNotification(error: unknown, context?: string): void {
   const friendlyError = getUserFriendlyError(error);
@@ -240,6 +241,9 @@ export function showErrorNotification(error: unknown, context?: string): void {
   // In a real app, this would trigger a toast/notification
   // For now, we'll use console
   console.warn(`${friendlyError.title}: ${friendlyError.message}`);
+  
+  // Return the friendly error so components can use it for toasts
+  return friendlyError;
 }
 
 

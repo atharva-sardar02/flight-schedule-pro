@@ -12,7 +12,7 @@ import { TrainingLevel } from '../../types/weather';
 import { UserRole, User } from '../../types/user';
 import { useAuth } from '../../hooks/useAuth';
 import { getUserFriendlyError, showErrorNotification } from '../../utils/errorHandling';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { EnhancedAlert, detectErrorType, isConflictError } from '@/components/ui/enhanced-alert';
 
 // Common US airports for demo
 const AIRPORTS = [
@@ -28,6 +28,7 @@ const AIRPORTS = [
 
 export default function CreateBooking() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { user } = useAuth();
 
   const [formData, setFormData] = useState<Partial<CreateBookingData>>({
@@ -214,6 +215,16 @@ export default function CreateBooking() {
       
       setError(errorMessage);
       showErrorNotification(err, 'create-booking');
+      
+      // Show toast for conflicts and important errors
+      const errorType = detectErrorType(errorMessage);
+      if (errorType === 'conflict' || isConflictError(errorMessage)) {
+        toast({
+          variant: 'destructive',
+          title: '⚠️ Booking Conflict',
+          description: errorMessage,
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -228,9 +239,11 @@ export default function CreateBooking() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <EnhancedAlert
+            variant={detectErrorType(error)}
+            message={error}
+            onClose={() => setError(null)}
+          />
         )}
 
         <div className="bg-white shadow-sm rounded-lg p-6 space-y-6">

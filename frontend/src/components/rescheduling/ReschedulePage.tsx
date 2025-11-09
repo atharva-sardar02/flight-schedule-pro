@@ -10,7 +10,8 @@ import { PreferenceRanking } from './PreferenceRanking';
 import { ConfirmationScreen } from './ConfirmationScreen';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
-import { Alert, AlertDescription } from '../ui/alert';
+import { EnhancedAlert, detectErrorType } from '../ui/enhanced-alert';
+import { useToast } from '@/hooks/use-toast';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import BookingService from '../../services/booking';
 import { Booking } from '../../types/booking';
@@ -29,6 +30,7 @@ type RescheduleStep = 'options' | 'preferences' | 'confirmation';
 export default function ReschedulePage() {
   const { bookingId } = useParams<{ bookingId: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [booking, setBooking] = useState<Booking | null>(null);
   const [options, setOptions] = useState<RescheduleOption[]>([]);
@@ -111,6 +113,13 @@ export default function ReschedulePage() {
       const friendlyError = getUserFriendlyError(err);
       setError(friendlyError.message);
       showErrorNotification(err, 'load-booking');
+      
+      // Show toast for important errors
+      toast({
+        variant: 'destructive',
+        title: friendlyError.title,
+        description: friendlyError.message,
+      });
     } finally {
       setLoading(false);
     }
@@ -218,6 +227,12 @@ export default function ReschedulePage() {
       const friendlyError = getUserFriendlyError(err);
       setError(friendlyError.message);
       showErrorNotification(err, 'submit-preferences');
+      
+      toast({
+        variant: 'destructive',
+        title: friendlyError.title,
+        description: friendlyError.message,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -280,6 +295,15 @@ export default function ReschedulePage() {
       const friendlyError = getUserFriendlyError(err);
       setError(friendlyError.message);
       showErrorNotification(err, 'confirm-reschedule');
+      
+      // Show toast for important errors (especially conflicts)
+      const errorType = detectErrorType(friendlyError.message);
+      toast({
+        variant: errorType === 'conflict' ? 'destructive' : 'destructive',
+        title: friendlyError.title,
+        description: friendlyError.message,
+      });
+      
       return { success: false, error: friendlyError.message };
     } finally {
       setSubmitting(false);
@@ -298,9 +322,11 @@ export default function ReschedulePage() {
   if (error && !booking) {
     return (
       <div className="max-w-4xl mx-auto">
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <EnhancedAlert
+          variant={detectErrorType(error)}
+          message={error}
+          onClose={() => setError(null)}
+        />
         <div className="mt-4">
           <Link to="/bookings" className="text-blue-600 hover:text-blue-800">
             ← Back to Bookings
@@ -343,9 +369,11 @@ export default function ReschedulePage() {
       </div>
 
       {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <EnhancedAlert
+          variant={detectErrorType(error)}
+          message={error}
+          onClose={() => setError(null)}
+        />
       )}
 
       {/* Step indicator */}
@@ -392,15 +420,12 @@ export default function ReschedulePage() {
       {step === 'preferences' && options.length > 0 && (
         <>
           {waitingForOther && (
-            <Alert className="mb-4 bg-blue-50 border-blue-200">
-              <AlertDescription className="text-blue-800">
-                <p className="font-semibold mb-1">✅ Your preferences have been submitted!</p>
-                <p className="text-sm">
-                  Waiting for the other party (student/instructor) to submit their preferences. 
-                  Once both are submitted, you'll be able to confirm the reschedule.
-                </p>
-              </AlertDescription>
-            </Alert>
+            <EnhancedAlert
+              variant="info"
+              title="✅ Preferences Submitted"
+              message="Waiting for the other party (student/instructor) to submit their preferences. Once both are submitted, you'll be able to confirm the reschedule."
+              className="mb-4"
+            />
           )}
           <PreferenceRanking
             options={options}

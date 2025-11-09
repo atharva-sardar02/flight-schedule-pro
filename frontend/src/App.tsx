@@ -6,6 +6,7 @@ import { Layout } from './components/layout/Layout';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import { Toaster } from './components/ui/toaster';
 import { Loader2 } from 'lucide-react';
 
 // Lazy load components for code splitting
@@ -176,6 +177,7 @@ function App() {
               <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
           </div>
+          <Toaster />
         </Router>
       </AuthProvider>
     </ErrorBoundary>
