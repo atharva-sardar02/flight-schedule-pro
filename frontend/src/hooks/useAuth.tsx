@@ -107,10 +107,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  // Check if authenticated: user exists OR tokens exist (for cases where getCurrentUser fails but tokens are valid)
+  const isAuthenticated = !!user || !!(tokens?.accessToken && AuthService.isAuthenticated());
+
   const value: AuthContextType = {
     user,
     tokens,
-    isAuthenticated: !!user,
+    isAuthenticated,
     isLoading,
     login,
     register,

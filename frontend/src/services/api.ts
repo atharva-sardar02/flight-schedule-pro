@@ -41,11 +41,12 @@ api.interceptors.response.use(
       
       // Only redirect if not already on login/register page
       // This prevents redirect loops and allows components to handle auth errors
-      const currentPath = window.location.pathname;
+      const currentPath = window.location.pathname + window.location.hash;
       if (!currentPath.includes('/login') && !currentPath.includes('/register')) {
         // Use a small delay to allow error handling in components first
+        // Use hash routing for S3 compatibility
         setTimeout(() => {
-          window.location.href = '/login';
+          window.location.href = '/#/login';
         }, 100);
       }
     }
