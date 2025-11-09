@@ -146,15 +146,47 @@ async function handleSubmitPreference(
     const service = new PreferenceRankingService(pool);
 
     // Get existing preference to check deadline
-    const existing = await service.getPreference(bookingId, user.id);
+    let existing = await service.getPreference(bookingId, user.id);
+    
+    // If preference doesn't exist, create it (should have been created when options were generated, but handle gracefully)
     if (!existing) {
-      return {
-        statusCode: 404,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          error: 'Preference ranking not found. This may indicate the reschedule options were not properly initialized.' 
-        }),
-      };
+      logInfo('Preference not found, creating it now', { bookingId, userId: user.id });
+      
+      // Get booking details to create preference
+      const bookingResult = await pool.query(
+        'SELECT student_id, instructor_id, scheduled_datetime FROM bookings WHERE id = $1',
+        [bookingId]
+      );
+      
+      if (bookingResult.rows.length === 0) {
+        return {
+          statusCode: 404,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Booking not found' }),
+        };
+      }
+      
+      const booking = bookingResult.rows[0];
+      const scheduledTime = new Date(booking.scheduled_datetime);
+      
+      // Create preference rankings for both student and instructor
+      await service.createPreferenceRankings(
+        bookingId,
+        booking.student_id,
+        booking.instructor_id,
+        scheduledTime
+      );
+      
+      // Get the preference we just created
+      existing = await service.getPreference(bookingId, user.id);
+      
+      if (!existing) {
+        return {
+          statusCode: 500,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Failed to create preference ranking' }),
+        };
+      }
     }
 
     // Enforce deadline

@@ -144,6 +144,37 @@ async function handleGenerateOptions(
     const rescheduleEngine = new RescheduleEngine(pool);
     const options = await rescheduleEngine.generateRescheduleOptions(bookingId);
 
+    // Create preference rankings for both student and instructor
+    // This allows both parties to submit their preferences
+    try {
+      const bookingResult = await pool.query(
+        'SELECT student_id, instructor_id, scheduled_datetime FROM bookings WHERE id = $1',
+        [bookingId]
+      );
+
+      if (bookingResult.rows.length > 0) {
+        const booking = bookingResult.rows[0];
+        const scheduledTime = new Date(booking.scheduled_datetime);
+        const preferenceService = new PreferenceRankingService(pool);
+        
+        await preferenceService.createPreferenceRankings(
+          bookingId,
+          booking.student_id,
+          booking.instructor_id,
+          scheduledTime
+        );
+        
+        logInfo('Preference rankings created for student and instructor', {
+          bookingId,
+          studentId: booking.student_id,
+          instructorId: booking.instructor_id,
+        });
+      }
+    } catch (error: any) {
+      // Log but don't fail - preferences can be created later if needed
+      logError('Failed to create preference rankings (non-critical)', error, { bookingId });
+    }
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
