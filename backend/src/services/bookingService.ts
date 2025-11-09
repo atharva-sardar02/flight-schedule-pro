@@ -131,46 +131,8 @@ export class BookingService {
         await client.query('COMMIT');
 
         return this.mapRowToBooking(result.rows[0]);
-      } catch (dbError) {
-        // Database error - rollback and throw
-        await client.query('ROLLBACK');
-        logger.error('Database error during booking creation', {
-          error: dbError instanceof Error ? dbError.message : 'Unknown',
-        });
-        throw dbError;
-
-        // Create booking with CONFIRMED status (weather will be checked by scheduler)
-        const result = await client.query(
-          `INSERT INTO bookings (
-            student_id, instructor_id, aircraft_id,
-            departure_airport, arrival_airport,
-            departure_latitude, departure_longitude,
-            arrival_latitude, arrival_longitude,
-            scheduled_datetime, status, training_level, duration_minutes,
-            created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
-          RETURNING *`,
-          [
-            data.studentId,
-            data.instructorId,
-            data.aircraftId || null,
-            data.departureAirport,
-            data.arrivalAirport,
-            data.departureLatitude,
-            data.departureLongitude,
-            data.arrivalLatitude,
-            data.arrivalLongitude,
-            scheduledDate,
-            BookingStatus.CONFIRMED,
-            data.trainingLevel,
-            data.durationMinutes || 60,
-          ]
-        );
-
-        await client.query('COMMIT');
-        return this.mapRowToBooking(result.rows[0]);
-      }
     } catch (error) {
+      // Rollback transaction on any error
       await client.query('ROLLBACK');
       logger.error('Failed to create booking', {
         error: error instanceof Error ? error.message : 'Unknown',
