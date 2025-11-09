@@ -21,9 +21,19 @@ let cognitoClient: CognitoIdentityProviderClient | null = null;
 
 function getCognitoClient(): CognitoIdentityProviderClient {
   if (!cognitoClient) {
-    cognitoClient = new CognitoIdentityProviderClient({
+    const config: any = {
       region: process.env.AWS_REGION || process.env.COGNITO_REGION || 'us-east-1',
-    });
+    };
+    
+    // If AWS credentials are provided via environment variables, use them
+    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+      config.credentials = {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      };
+    }
+    
+    cognitoClient = new CognitoIdentityProviderClient(config);
   }
   return cognitoClient;
 }
