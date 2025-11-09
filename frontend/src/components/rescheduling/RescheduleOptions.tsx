@@ -16,9 +16,10 @@ import { getUserFriendlyError, showErrorNotification } from '../../utils/errorHa
 interface RescheduleOptionsProps {
   bookingId: string;
   onOptionsLoaded?: (options: RescheduleOption[]) => void;
+  onContinue?: () => void;
 }
 
-export function RescheduleOptions({ bookingId, onOptionsLoaded }: RescheduleOptionsProps) {
+export function RescheduleOptions({ bookingId, onOptionsLoaded, onContinue }: RescheduleOptionsProps) {
   const [options, setOptions] = useState<RescheduleOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -180,6 +181,14 @@ export function RescheduleOptions({ bookingId, onOptionsLoaded }: RescheduleOpti
           </Card>
         ))}
       </div>
+
+      {onContinue && (
+        <div className="flex justify-end mt-6">
+          <Button onClick={onContinue} size="lg">
+            Continue to Preferences
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

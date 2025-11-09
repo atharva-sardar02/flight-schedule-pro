@@ -66,17 +66,44 @@ export default function ReschedulePage() {
         // Load existing preferences if any
         try {
           const preferenceData = await getMyPreference(bookingId);
-          setExistingRanking({
-            option1Id: preferenceData.preference.option1Id,
-            option2Id: preferenceData.preference.option2Id,
-            option3Id: preferenceData.preference.option3Id,
-            unavailableOptionIds: preferenceData.preference.unavailableOptionIds || [],
-          });
+          if (preferenceData.preference) {
+            setExistingRanking({
+              option1Id: preferenceData.preference.option1Id,
+              option2Id: preferenceData.preference.option2Id,
+              option3Id: preferenceData.preference.option3Id,
+              unavailableOptionIds: preferenceData.preference.unavailableOptionIds || [],
+            });
+            // If preferences already submitted, find the selected option and go to confirmation
+            const selectedId = preferenceData.preference.option1Id || preferenceData.preference.option2Id || preferenceData.preference.option3Id;
+            if (selectedId && existingOptions.length > 0) {
+              const selected = existingOptions.find((opt) => opt.id === selectedId);
+              if (selected) {
+                setSelectedOption(selected);
+                setStep('confirmation');
+              } else {
+                // Preferences submitted but option not found, go to preferences to re-select
+                setStep('preferences');
+              }
+            } else if (existingOptions.length > 0) {
+              // Options exist but no preferences yet, stay on options step to show them first
+              // User can then continue to preferences
+              setStep('options');
+            }
+          } else if (existingOptions.length > 0) {
+            // Options exist but no preferences yet, stay on options step
+            setStep('options');
+          }
         } catch (err) {
           // No existing preferences, that's okay
+          // If options exist, stay on options step to show them
+          if (existingOptions.length > 0) {
+            setStep('options');
+          }
         }
       } catch (err) {
         // No options yet, user will need to generate them
+        // Stay on options step
+        setStep('options');
       }
     } catch (err: any) {
       const friendlyError = getUserFriendlyError(err);
@@ -89,9 +116,24 @@ export default function ReschedulePage() {
 
   const handleOptionsLoaded = (loadedOptions: RescheduleOption[]) => {
     setOptions(loadedOptions);
-    if (loadedOptions.length > 0) {
-      setStep('preferences');
+    // Don't automatically move to preferences - let user see options first
+    // They can continue to preferences from the options view
+    // Only auto-advance if preferences were already submitted
+    if (loadedOptions.length > 0 && existingRanking) {
+      const selectedId = existingRanking.option1Id || existingRanking.option2Id || existingRanking.option3Id;
+      if (selectedId) {
+        const selected = loadedOptions.find((opt) => opt.id === selectedId);
+        if (selected) {
+          setSelectedOption(selected);
+          setStep('confirmation');
+        } else {
+          setStep('preferences');
+        }
+      } else {
+        setStep('preferences');
+      }
     }
+    // Otherwise, stay on options step to show them
   };
 
   const handleSubmitPreferences = async (ranking: {
@@ -258,6 +300,11 @@ export default function ReschedulePage() {
         <RescheduleOptions
           bookingId={bookingId!}
           onOptionsLoaded={handleOptionsLoaded}
+          onContinue={() => {
+            if (options.length > 0) {
+              setStep('preferences');
+            }
+          }}
         />
       )}
 
