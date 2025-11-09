@@ -57,7 +57,7 @@ async function runMigration(filename) {
 
 async function main() {
   console.log('🚀 Starting database migrations...\n');
-  Database:', process.env.DATABASE_NAME);
+  console.log('  Database:', process.env.DATABASE_NAME);
   console.log('  Host:', process.env.DATABASE_HOST);
   console.log('  User:', process.env.DATABASE_USER);
   console.log('');
