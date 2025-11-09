@@ -152,30 +152,30 @@ async function handleLogin(
     // Look up database user ID using Cognito user ID
     let user;
     try {
-      const pool = getDbPool();
-      const dbUser = await pool.query(
-        'SELECT id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at FROM users WHERE cognito_user_id = $1',
-        [cognitoUser.id]
-      );
+    const pool = getDbPool();
+    const dbUser = await pool.query(
+      'SELECT id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at FROM users WHERE cognito_user_id = $1',
+      [cognitoUser.id]
+    );
 
-      if (dbUser.rows.length === 0) {
-        // User exists in Cognito but not in database - use Cognito user info
-        logger.warn('User found in Cognito but not in database', { cognitoUserId: cognitoUser.id });
-        user = cognitoUser;
-      } else {
-        // Return user with database ID
-        const userRow = dbUser.rows[0];
-        user = {
-          id: userRow.id, // Use database ID, not Cognito ID
-          email: userRow.email,
-          firstName: userRow.first_name,
-          lastName: userRow.last_name,
-          phoneNumber: userRow.phone_number,
-          role: userRow.role,
-          trainingLevel: userRow.training_level,
-          createdAt: userRow.created_at,
-          updatedAt: userRow.updated_at,
-        };
+    if (dbUser.rows.length === 0) {
+      // User exists in Cognito but not in database - use Cognito user info
+      logger.warn('User found in Cognito but not in database', { cognitoUserId: cognitoUser.id });
+      user = cognitoUser;
+    } else {
+      // Return user with database ID
+      const userRow = dbUser.rows[0];
+      user = {
+        id: userRow.id, // Use database ID, not Cognito ID
+        email: userRow.email,
+        firstName: userRow.first_name,
+        lastName: userRow.last_name,
+        phoneNumber: userRow.phone_number,
+        role: userRow.role,
+        trainingLevel: userRow.training_level,
+        createdAt: userRow.created_at,
+        updatedAt: userRow.updated_at,
+      };
       }
     } catch (dbError: any) {
       // If database table doesn't exist or query fails, use Cognito user info
@@ -257,24 +257,29 @@ async function handleRegister(
 
     // Create user record in database
     try {
-      const pool = getDbPool();
-      const client = await pool.connect();
+    const pool = getDbPool();
+    const client = await pool.connect();
 
-      try {
-        await client.query(
-          `INSERT INTO users (cognito_user_id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-          [result.userId, data.email, data.firstName, data.lastName, data.phoneNumber || null, data.role, data.trainingLevel || null]
-        );
-        logger.info('User record created in database', { userId: result.userId });
-      } finally {
-        client.release();
+    try {
+      await client.query(
+        `INSERT INTO users (cognito_user_id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+        [result.userId, data.email, data.firstName, data.lastName, data.phoneNumber || null, data.role, data.trainingLevel || null]
+      );
+      logger.info('User record created in database', { userId: result.userId });
+    } finally {
+      client.release();
       }
     } catch (dbError: any) {
-      logger.warn('Failed to create user record in database (continuing anyway)', { 
+      logger.error('Failed to create user record in database', { 
         error: dbError.message,
-        email: data.email 
+        code: dbError.code,
+        detail: dbError.detail,
+        email: data.email,
+        stack: dbError.stack
       });
+      // Don't throw - registration in Cognito succeeded, so return success
+      // User can be added to database later via sync or manual process
     }
 
     return {
@@ -392,41 +397,41 @@ async function handleGetCurrentUser(
 
     // Look up user in database
     try {
-      const pool = getDbPool();
-      const dbUser = await pool.query(
-        'SELECT id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at FROM users WHERE cognito_user_id = $1',
-        [cognitoUser.id]
-      );
+    const pool = getDbPool();
+    const dbUser = await pool.query(
+      'SELECT id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at FROM users WHERE cognito_user_id = $1',
+      [cognitoUser.id]
+    );
 
-      if (dbUser.rows.length === 0) {
-        // User exists in Cognito but not in database - return Cognito user info
-        logger.warn('User found in Cognito but not in database', { cognitoUserId: cognitoUser.id });
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ user: cognitoUser }),
-        };
-      }
-
-      // Return user with database ID
-      const userRow = dbUser.rows[0];
-      const user = {
-        id: userRow.id, // Use database ID, not Cognito ID
-        email: userRow.email,
-        firstName: userRow.first_name,
-        lastName: userRow.last_name,
-        phoneNumber: userRow.phone_number,
-        role: userRow.role,
-        trainingLevel: userRow.training_level,
-        createdAt: userRow.created_at,
-        updatedAt: userRow.updated_at,
-      };
-
+    if (dbUser.rows.length === 0) {
+      // User exists in Cognito but not in database - return Cognito user info
+      logger.warn('User found in Cognito but not in database', { cognitoUserId: cognitoUser.id });
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({ user }),
+        body: JSON.stringify({ user: cognitoUser }),
       };
+    }
+
+    // Return user with database ID
+    const userRow = dbUser.rows[0];
+    const user = {
+      id: userRow.id, // Use database ID, not Cognito ID
+      email: userRow.email,
+      firstName: userRow.first_name,
+      lastName: userRow.last_name,
+      phoneNumber: userRow.phone_number,
+      role: userRow.role,
+      trainingLevel: userRow.training_level,
+      createdAt: userRow.created_at,
+      updatedAt: userRow.updated_at,
+    };
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ user }),
+    };
     } catch (dbError: any) {
       // If database table doesn't exist, return Cognito user info
       logger.warn('Database lookup failed, using Cognito user info', { 
