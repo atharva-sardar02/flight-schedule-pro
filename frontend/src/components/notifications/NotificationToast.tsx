@@ -17,25 +17,32 @@ export function NotificationToast() {
 
   useEffect(() => {
     // Fetch notifications on mount
-    fetchNotifications().then(setNotifications);
+    fetchNotifications().then(setNotifications).catch(err => {
+      console.warn('Failed to fetch notifications:', err);
+    });
 
     // Poll for new notifications every 10 seconds
     const interval = setInterval(async () => {
-      const newNotifications = await fetchNotifications();
-      setNotifications((prev) => {
-        // Check if there are new unread notifications
-        const newUnread = newNotifications.filter(
-          (n) => !n.read && !prev.find((p) => p.id === n.id)
-        );
-        
-        if (newUnread.length > 0 && !showToast) {
-          // Show the most recent unread notification
-          setCurrentNotification(newUnread[0]);
-          setShowToast(true);
-        }
-        
-        return newNotifications;
-      });
+      try {
+        const newNotifications = await fetchNotifications();
+        setNotifications((prev) => {
+          // Check if there are new unread notifications
+          const newUnread = newNotifications.filter(
+            (n) => !n.read && !prev.find((p) => p.id === n.id)
+          );
+          
+          if (newUnread.length > 0 && !showToast) {
+            // Show the most recent unread notification
+            setCurrentNotification(newUnread[0]);
+            setShowToast(true);
+          }
+          
+          return newNotifications;
+        });
+      } catch (err) {
+        // Silently fail - don't spam console with timeout errors
+        console.debug('Notification poll failed (will retry):', err);
+      }
     }, 10000); // Check every 10 seconds
 
     return () => clearInterval(interval);

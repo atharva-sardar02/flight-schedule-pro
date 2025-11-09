@@ -44,7 +44,10 @@ export const useNotifications = () => {
       const count = await notificationService.getUnreadCount();
       setUnreadCount(count);
     } catch (err: any) {
-      console.error('Failed to fetch unread count:', err);
+      // Silently fail - don't spam console with errors
+      // The API might not be available yet or endpoint might not exist
+      console.debug('Failed to fetch unread count (will retry):', err.message);
+      setUnreadCount(0); // Default to 0 on error
     }
   }, []);
 
