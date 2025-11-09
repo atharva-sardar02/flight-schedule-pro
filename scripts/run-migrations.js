@@ -48,7 +48,7 @@ async function runMigration(filename) {
     for (const statement of statements) {
       try {
         await pool.query(statement);
-      } catch (stmtError: any) {
+      } catch (stmtError) {
         // Ignore "already exists" errors
         if (stmtError.message.includes('already exists') || stmtError.code === '42P07') {
           // Skip
@@ -67,7 +67,7 @@ async function runMigration(filename) {
       }
     }
     console.log(`✅ ${filename} completed`);
-  } catch (error: any) {
+  } catch (error) {
     console.error(`❌ ${filename} failed:`, error.message);
     throw error;
   }
