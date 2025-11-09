@@ -76,6 +76,35 @@ app.get('/health', (_req, res) => {
   });
 });
 
+// Database health check endpoint
+app.get('/health/db', async (_req, res) => {
+  try {
+    const pool = getDbPool();
+    const result = await pool.query('SELECT NOW() as current_time, version() as postgres_version');
+    const tableCount = await pool.query(`
+      SELECT COUNT(*) as count 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
+    `);
+    
+    res.json({
+      status: 'connected',
+      database: process.env.DATABASE_NAME,
+      host: process.env.DATABASE_HOST,
+      currentTime: result.rows[0].current_time,
+      postgresVersion: result.rows[0].postgres_version.split(' ')[0] + ' ' + result.rows[0].postgres_version.split(' ')[1],
+      tablesCount: parseInt(tableCount.rows[0].count),
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Test route: Health check through auth handler (simulates Lambda behavior)
 app.get('/test-health', async (req, res) => {
   try {
