@@ -618,6 +618,12 @@ app.use('/preferences/:action?/:bookingId?', async (req, res) => {
 
 // Notifications Routes
 // IMPORTANT: Define more specific routes FIRST to avoid route matching issues
+// Add a test route to verify routing works
+app.get('/notifications/test', (_req, res) => {
+  logger.info('Notifications test route hit');
+  res.json({ message: 'Notifications routes are working!' });
+});
+
 app.get('/notifications/unread/count', requireAuth, async (req: any, res) => {
   try {
     logger.info('Notifications unread count endpoint hit', { userId: req.user?.id });
