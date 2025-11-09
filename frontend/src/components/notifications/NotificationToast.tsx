@@ -16,8 +16,16 @@ export function NotificationToast() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Fetch notifications on mount
-    fetchNotifications().then(setNotifications).catch(err => {
+    // Fetch notifications on mount and show first unread
+    fetchNotifications().then((notifications) => {
+      setNotifications(notifications);
+      // Show the most recent unread notification on initial load
+      const unread = notifications.filter(n => !n.read);
+      if (unread.length > 0 && !showToast) {
+        setCurrentNotification(unread[0]);
+        setShowToast(true);
+      }
+    }).catch(err => {
       console.warn('Failed to fetch notifications:', err);
     });
 
@@ -26,14 +34,23 @@ export function NotificationToast() {
       try {
         const newNotifications = await fetchNotifications();
         setNotifications((prev) => {
-          // Check if there are new unread notifications
+          // Check if there are new unread notifications (not in previous state)
           const newUnread = newNotifications.filter(
             (n) => !n.read && !prev.find((p) => p.id === n.id)
           );
           
+          // Also check if there are any unread notifications we haven't shown yet
+          const unreadNotShown = newNotifications.filter(
+            (n) => !n.read && n.id !== currentNotification?.id
+          );
+          
           if (newUnread.length > 0 && !showToast) {
-            // Show the most recent unread notification
+            // Show the most recent new unread notification
             setCurrentNotification(newUnread[0]);
+            setShowToast(true);
+          } else if (unreadNotShown.length > 0 && !showToast) {
+            // Show the most recent unread notification we haven't shown
+            setCurrentNotification(unreadNotShown[0]);
             setShowToast(true);
           }
           
@@ -46,7 +63,7 @@ export function NotificationToast() {
     }, 10000); // Check every 10 seconds
 
     return () => clearInterval(interval);
-  }, [fetchNotifications, showToast]);
+  }, [fetchNotifications, showToast, currentNotification]);
 
   const handleClose = async () => {
     if (currentNotification) {
