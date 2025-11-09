@@ -27,8 +27,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       if (AuthService.isAuthenticated()) {
         try {
-          const currentUser = await AuthService.getCurrentUser();
-          setUser(currentUser);
+        const currentUser = await AuthService.getCurrentUser();
+        setUser(currentUser);
         } catch (error) {
           // If getCurrentUser fails, try to use stored user data
           console.warn('Failed to fetch current user, checking localStorage', error);
