@@ -292,16 +292,24 @@ async function handleRegister(
         client.release();
       }
     } catch (dbError: any) {
-      logger.error('Failed to create user record in database', { 
-        error: dbError.message,
+      // Log full error details
+      const errorDetails = {
+        message: dbError.message,
         code: dbError.code,
         detail: dbError.detail,
         constraint: dbError.constraint,
+        table: dbError.table,
+        column: dbError.column,
         email: data.email,
         cognitoUserId: result.userId,
         role: data.role,
-        stack: dbError.stack
-      });
+        roleType: typeof data.role,
+        firstName: data.firstName,
+        lastName: data.lastName,
+      };
+      
+      logger.error('Failed to create user record in database', errorDetails);
+      console.error('Database insert error details:', JSON.stringify(errorDetails, null, 2));
       // Don't throw - registration in Cognito succeeded, so return success
       // User can be added to database later via sync or manual process
     }
