@@ -58,6 +58,96 @@ export class BookingService {
         throw new Error('User is not an instructor');
       }
 
+      // CHECK FOR BOOKING CONFLICTS
+      // Check if student or instructor already has a booking at this time
+      const slotStart = new Date(scheduledDate);
+      slotStart.setMinutes(slotStart.getMinutes() - 30); // 30 min buffer before
+      const slotEnd = new Date(scheduledDate);
+      slotEnd.setMinutes(slotEnd.getMinutes() + (data.durationMinutes || 60) + 30); // Duration + 30 min buffer after
+
+      const conflictCheck = await client.query(
+        `SELECT id, scheduled_datetime, status, student_id, instructor_id
+         FROM bookings
+         WHERE status IN ('CONFIRMED', 'AT_RISK', 'RESCHEDULING', 'RESCHEDULED')
+           AND scheduled_datetime >= $1
+           AND scheduled_datetime <= $2
+           AND (student_id = $3 OR instructor_id = $4)`,
+        [slotStart, slotEnd, data.studentId, data.instructorId]
+      );
+
+      if (conflictCheck.rows.length > 0) {
+        const conflictingBooking = conflictCheck.rows[0];
+        const conflictType = conflictingBooking.student_id === data.studentId 
+          ? 'student' 
+          : 'instructor';
+        const conflictTime = new Date(conflictingBooking.scheduled_datetime);
+        
+        throw new Error(
+          `Booking conflict: ${conflictType} already has a ${conflictingBooking.status.toLowerCase()} booking at ${conflictTime.toISOString()}. ` +
+          `Please choose a different time.`
+        );
+      }
+
+      // CHECK CALENDAR AVAILABILITY
+      // Check if student is available in their calendar
+      const { AvailabilityService } = require('./availabilityService');
+      const availabilityService = new AvailabilityService(pool);
+      const { format } = require('date-fns');
+      
+      logger.info('Checking availability before creating booking', {
+        studentId: data.studentId,
+        instructorId: data.instructorId,
+        scheduledDate: scheduledDate.toISOString(),
+      });
+      
+      const dateStr = format(scheduledDate, 'yyyy-MM-dd');
+      const timeStr = format(scheduledDate, 'HH:mm');
+      const endTimeStr = format(slotEnd, 'HH:mm');
+
+      // Check student availability
+      const studentAvailability = await availabilityService.getAvailability({
+        userId: data.studentId,
+        startDate: dateStr,
+        endDate: dateStr,
+      });
+
+      const studentAvailable = studentAvailability.slots.some((slot) => {
+        const slotDate = format(new Date(slot.date), 'yyyy-MM-dd');
+        if (slotDate !== dateStr) return false;
+        if (!slot.isAvailable) return false;
+        // Check if booking time falls within available slot
+        return timeStr >= slot.startTime && timeStr <= slot.endTime;
+      });
+
+      if (!studentAvailable) {
+        throw new Error(
+          `Student is not available in their calendar at ${scheduledDate.toISOString()}. ` +
+          `Please choose a time when the student is available.`
+        );
+      }
+
+      // Check instructor availability
+      const instructorAvailability = await availabilityService.getAvailability({
+        userId: data.instructorId,
+        startDate: dateStr,
+        endDate: dateStr,
+      });
+
+      const instructorAvailable = instructorAvailability.slots.some((slot) => {
+        const slotDate = format(new Date(slot.date), 'yyyy-MM-dd');
+        if (slotDate !== dateStr) return false;
+        if (!slot.isAvailable) return false;
+        // Check if booking time falls within available slot
+        return timeStr >= slot.startTime && timeStr <= slot.endTime;
+      });
+
+      if (!instructorAvailable) {
+        throw new Error(
+          `Instructor is not available in their calendar at ${scheduledDate.toISOString()}. ` +
+          `Please choose a time when the instructor is available.`
+        );
+      }
+
       // Perform initial weather validation
       const path = calculateFlightPath(
         {
