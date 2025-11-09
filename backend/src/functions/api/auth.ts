@@ -257,25 +257,49 @@ async function handleRegister(
 
     // Create user record in database
     try {
-    const pool = getDbPool();
-    const client = await pool.connect();
+      const pool = getDbPool();
+      const client = await pool.connect();
 
-    try {
-      await client.query(
-        `INSERT INTO users (cognito_user_id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-        [result.userId, data.email, data.firstName, data.lastName, data.phoneNumber || null, data.role, data.trainingLevel || null]
-      );
-      logger.info('User record created in database', { userId: result.userId });
-    } finally {
-      client.release();
+      try {
+        // Check if user already exists (by email or cognito_user_id)
+        const existing = await client.query(
+          'SELECT id FROM users WHERE email = $1 OR cognito_user_id = $2',
+          [data.email, result.userId]
+        );
+
+        if (existing.rows.length > 0) {
+          logger.info('User already exists in database', { 
+            userId: existing.rows[0].id,
+            email: data.email,
+            cognitoUserId: result.userId
+          });
+        } else {
+          // Ensure role is uppercase to match database constraint
+          const roleUpper = (data.role || 'STUDENT').toUpperCase();
+          
+          await client.query(
+            `INSERT INTO users (cognito_user_id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+            [result.userId, data.email, data.firstName, data.lastName, data.phoneNumber || null, roleUpper, data.trainingLevel || null]
+          );
+          logger.info('User record created in database', { 
+            userId: result.userId,
+            email: data.email,
+            role: roleUpper
+          });
+        }
+      } finally {
+        client.release();
       }
     } catch (dbError: any) {
       logger.error('Failed to create user record in database', { 
         error: dbError.message,
         code: dbError.code,
         detail: dbError.detail,
+        constraint: dbError.constraint,
         email: data.email,
+        cognitoUserId: result.userId,
+        role: data.role,
         stack: dbError.stack
       });
       // Don't throw - registration in Cognito succeeded, so return success
