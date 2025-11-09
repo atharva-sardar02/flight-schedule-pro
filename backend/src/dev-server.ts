@@ -629,7 +629,8 @@ app.use('/reschedule/:action?/:bookingId?', async (req, res) => {
 });
 
 // Preferences Routes
-// Use app.all with wildcard to match all /preferences/* routes
+// IMPORTANT: Use app.all with wildcard to match all /preferences/* routes
+// This must come before any catch-all routes
 app.all('/preferences*', async (req, res) => {
   try {
     // Use originalUrl to get the full path including /preferences
@@ -640,7 +641,8 @@ app.all('/preferences*', async (req, res) => {
       method: req.method, 
       originalUrl: req.originalUrl,
       path: req.path,
-      fullPath: fullPath
+      fullPath: fullPath,
+      body: req.body ? 'present' : 'missing'
     });
     
     // Extract bookingId from path segments
@@ -660,6 +662,12 @@ app.all('/preferences*', async (req, res) => {
       }
     }
 
+    logger.info('Preferences route - creating Lambda event', {
+      fullPath,
+      bookingId,
+      hasBody: !!req.body
+    });
+
     const event = {
       httpMethod: req.method,
       path: fullPath,
@@ -675,7 +683,18 @@ app.all('/preferences*', async (req, res) => {
       multiValueQueryStringParameters: null
     };
 
+    logger.info('Preferences route - calling handler', {
+      method: event.httpMethod,
+      path: event.path,
+      hasPathParams: !!event.pathParameters
+    });
+
     const result = await preferencesHandler(event as any);
+    
+    logger.info('Preferences route - handler returned', {
+      statusCode: result.statusCode,
+      hasHeaders: !!result.headers
+    });
     
     res.status(result.statusCode);
     
@@ -686,9 +705,16 @@ app.all('/preferences*', async (req, res) => {
     }
     
     res.send(result.body);
-  } catch (error) {
-    logger.error('Preferences route error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  } catch (error: any) {
+    logger.error('Preferences route error:', {
+      error: error.message,
+      stack: error.stack,
+      originalUrl: req.originalUrl
+    });
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
