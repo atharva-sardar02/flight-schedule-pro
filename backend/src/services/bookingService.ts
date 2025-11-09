@@ -70,6 +70,9 @@ export class BookingService {
         }
       );
 
+      let initialStatus = BookingStatus.CONFIRMED;
+      
+      // Try weather check, but don't fail if it errors
       try {
         const weatherCheck = await WeatherService.checkWeatherForFlight(
           path,
@@ -77,7 +80,7 @@ export class BookingService {
         );
 
         // If weather is invalid, set status to AT_RISK
-        const initialStatus = weatherCheck.validation.isValid
+        initialStatus = weatherCheck.validation.isValid
           ? BookingStatus.CONFIRMED
           : BookingStatus.AT_RISK;
 
@@ -87,6 +90,15 @@ export class BookingService {
             violations: weatherCheck.validation.violations.length,
           });
         }
+      } catch (weatherError: any) {
+        // Weather check failed - log but continue with booking creation
+        logger.warn('Weather check failed, proceeding with booking creation', {
+          error: weatherError.message,
+          code: weatherError.code,
+        });
+        // Default to CONFIRMED if weather check fails
+        initialStatus = BookingStatus.CONFIRMED;
+      }
 
         // Insert booking
         const result = await client.query(
@@ -119,7 +131,7 @@ export class BookingService {
         await client.query('COMMIT');
 
         return this.mapRowToBooking(result.rows[0]);
-      } catch (weatherError) {
+      } catch (dbError) {
         // If weather check fails, still create booking but log error
         logger.error('Weather validation failed during booking creation', {
           error: weatherError instanceof Error ? weatherError.message : 'Unknown',

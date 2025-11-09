@@ -220,6 +220,7 @@ async function handleCreateBooking(
   } catch (error) {
     logger.error('Create booking failed', {
       error: error instanceof Error ? error.message : 'Unknown',
+      stack: error instanceof Error ? error.stack : undefined,
     });
 
     return {
@@ -228,6 +229,7 @@ async function handleCreateBooking(
       body: JSON.stringify({
         error: 'Failed to create booking',
         message: error instanceof Error ? error.message : 'Unknown error',
+        details: error instanceof Error ? error.stack : undefined,
       }),
     };
   }
