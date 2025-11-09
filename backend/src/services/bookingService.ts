@@ -102,28 +102,29 @@ export class BookingService {
         scheduledDateUTC: scheduledDate.toUTCString(),
       });
       
-      // Extract date and time components using local timezone
-      // Availability times are stored in local timezone (e.g., "09:00" to "17:00")
-      // So we need to format the booking time in local timezone to match
-      const year = scheduledDate.getFullYear();
-      const month = String(scheduledDate.getMonth() + 1).padStart(2, '0');
-      const day = String(scheduledDate.getDate()).padStart(2, '0');
+      // Extract date and time components using UTC
+      // The scheduledDate is already in UTC (from frontend ISO string)
+      // Availability times are stored as "HH:mm" strings (e.g., "09:00" to "17:00")
+      // We'll interpret these as UTC times for consistency
+      const year = scheduledDate.getUTCFullYear();
+      const month = String(scheduledDate.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(scheduledDate.getUTCDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
       
-      const hours = String(scheduledDate.getHours()).padStart(2, '0');
-      const minutes = String(scheduledDate.getMinutes()).padStart(2, '0');
+      const hours = String(scheduledDate.getUTCHours()).padStart(2, '0');
+      const minutes = String(scheduledDate.getUTCMinutes()).padStart(2, '0');
       const timeStr = `${hours}:${minutes}`;
       
-      const endHours = String(slotEnd.getHours()).padStart(2, '0');
-      const endMinutes = String(slotEnd.getMinutes()).padStart(2, '0');
+      const endHours = String(slotEnd.getUTCHours()).padStart(2, '0');
+      const endMinutes = String(slotEnd.getUTCMinutes()).padStart(2, '0');
       const endTimeStr = `${endHours}:${endMinutes}`;
       
-      logger.info('Formatted booking time for availability check', {
+      logger.info('Formatted booking time for availability check (UTC)', {
         dateStr,
         timeStr,
         endTimeStr,
         scheduledDateISO: scheduledDate.toISOString(),
-        scheduledDateLocal: scheduledDate.toString(),
+        scheduledDateUTC: scheduledDate.toUTCString(),
       });
 
       // Check student availability
@@ -147,28 +148,29 @@ export class BookingService {
       });
 
       const studentAvailable = studentAvailability.slots.some((slot) => {
-        // Format slot date using local timezone to match booking date formatting
+        // Format slot date using UTC to match booking date formatting
         // slot.date might be a Date object or a string (YYYY-MM-DD)
         let slotDateStr: string;
         if (slot.date instanceof Date) {
-          const slotYear = slot.date.getFullYear();
-          const slotMonth = String(slot.date.getMonth() + 1).padStart(2, '0');
-          const slotDay = String(slot.date.getDate()).padStart(2, '0');
+          const slotYear = slot.date.getUTCFullYear();
+          const slotMonth = String(slot.date.getUTCMonth() + 1).padStart(2, '0');
+          const slotDay = String(slot.date.getUTCDate()).padStart(2, '0');
           slotDateStr = `${slotYear}-${slotMonth}-${slotDay}`;
         } else if (typeof slot.date === 'string') {
           // If it's already a YYYY-MM-DD string, use it directly
           slotDateStr = slot.date.substring(0, 10);
         } else {
           const slotDate = new Date(slot.date);
-          const slotYear = slotDate.getFullYear();
-          const slotMonth = String(slotDate.getMonth() + 1).padStart(2, '0');
-          const slotDay = String(slotDate.getDate()).padStart(2, '0');
+          const slotYear = slotDate.getUTCFullYear();
+          const slotMonth = String(slotDate.getUTCMonth() + 1).padStart(2, '0');
+          const slotDay = String(slotDate.getUTCDate()).padStart(2, '0');
           slotDateStr = `${slotYear}-${slotMonth}-${slotDay}`;
         }
         
         if (slotDateStr !== dateStr) return false;
         if (!slot.isAvailable) return false;
-        // Check if booking time falls within available slot
+        // Check if booking time (in UTC) falls within available slot time range
+        // Availability times are stored as "HH:mm" strings, interpreted as UTC
         const timeMatch = timeStr >= slot.startTime && timeStr <= slot.endTime;
         if (!timeMatch) {
           logger.info('Time mismatch in availability check', {
@@ -176,6 +178,7 @@ export class BookingService {
             slotStart: slot.startTime,
             slotEnd: slot.endTime,
             slotDate: slotDateStr,
+            dateStr,
           });
         }
         return timeMatch;
@@ -196,28 +199,29 @@ export class BookingService {
       });
 
       const instructorAvailable = instructorAvailability.slots.some((slot) => {
-        // Format slot date using local timezone to match booking date formatting
+        // Format slot date using UTC to match booking date formatting
         // slot.date might be a Date object or a string (YYYY-MM-DD)
         let slotDateStr: string;
         if (slot.date instanceof Date) {
-          const slotYear = slot.date.getFullYear();
-          const slotMonth = String(slot.date.getMonth() + 1).padStart(2, '0');
-          const slotDay = String(slot.date.getDate()).padStart(2, '0');
+          const slotYear = slot.date.getUTCFullYear();
+          const slotMonth = String(slot.date.getUTCMonth() + 1).padStart(2, '0');
+          const slotDay = String(slot.date.getUTCDate()).padStart(2, '0');
           slotDateStr = `${slotYear}-${slotMonth}-${slotDay}`;
         } else if (typeof slot.date === 'string') {
           // If it's already a YYYY-MM-DD string, use it directly
           slotDateStr = slot.date.substring(0, 10);
         } else {
           const slotDate = new Date(slot.date);
-          const slotYear = slotDate.getFullYear();
-          const slotMonth = String(slotDate.getMonth() + 1).padStart(2, '0');
-          const slotDay = String(slotDate.getDate()).padStart(2, '0');
+          const slotYear = slotDate.getUTCFullYear();
+          const slotMonth = String(slotDate.getUTCMonth() + 1).padStart(2, '0');
+          const slotDay = String(slotDate.getUTCDate()).padStart(2, '0');
           slotDateStr = `${slotYear}-${slotMonth}-${slotDay}`;
         }
         
         if (slotDateStr !== dateStr) return false;
         if (!slot.isAvailable) return false;
-        // Check if booking time falls within available slot
+        // Check if booking time (in UTC) falls within available slot time range
+        // Availability times are stored as "HH:mm" strings, interpreted as UTC
         return timeStr >= slot.startTime && timeStr <= slot.endTime;
       });
 
