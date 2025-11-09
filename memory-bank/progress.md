@@ -46,6 +46,8 @@
 - [x] PR #20: Staging Deployment & Testing ✅ **DEPLOYED** (EC2 + S3 + RDS)
 - [x] UI Improvements: Instructor dropdown, real dashboard data ✅
 - [x] Database fixes: User registration, training level constraints ✅
+- [x] Auto-Regeneration Feature: AI automatically regenerates options when weather validation fails at confirmation ✅
+- [x] RESCHEDULED Status: Added new booking status for completed reschedules ✅
 - [ ] PR #21: Bug Fixes from Staging (Ongoing)
 - [ ] PR #22: Production Deployment Preparation
 - [ ] PR #23: Production Deployment

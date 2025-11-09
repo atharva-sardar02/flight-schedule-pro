@@ -42,6 +42,7 @@ Flight Schedule Pro automatically:
 - 🌤️ Weather forecast validation for all 5 locations per suggestion
 - 🎯 Generates 3 ranked alternative time slots
 - 📧 **Automatic Notifications:** Users are notified when options are ready to review
+- 🔁 **Auto-Regeneration on Weather Conflict:** If weather validation fails at final confirmation, AI automatically regenerates new options without user intervention
 
 ### Availability Management
 - 📆 Built-in calendar system for instructors and students
@@ -55,6 +56,7 @@ Flight Schedule Pro automatically:
 - 👨‍✈️ Instructor priority for final selection
 - 🔔 Reminder notifications 2 hours before deadline
 - 📞 Automatic escalation to manual scheduling if deadline passes
+- 🔄 **Weather Re-validation:** Final weather check before confirmation; if weather is invalid, AI automatically regenerates new options
 
 ### Notifications
 - 📧 Email notifications via AWS SES
@@ -419,5 +421,7 @@ See `docs/deployment_bible.md` for step-by-step deployment instructions.
 - ✅ Instructor selection dropdown (no UUIDs visible to users)
 - ✅ Weather monitoring and conflict detection
 - ✅ **Automatic AI rescheduling when weather gets bad**
+- ✅ **Auto-regeneration of options when weather validation fails at confirmation**
 - ✅ User preference ranking system
+- ✅ RESCHEDULED status tracking for completed reschedules
 

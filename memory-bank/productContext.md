@@ -16,6 +16,7 @@ Flight Schedule Pro **automatically** handles weather conflicts:
 - 📧 Users are notified when options are ready to review
 - 🎯 Provides 3 optimal alternative time slots that respect availability and weather conditions
 - ⏱️ Users rank preferences with deadline enforcement
+- 🔁 **Auto-Regeneration:** If weather validation fails at final confirmation, AI automatically regenerates new options without user intervention
 
 ### Current Pain Points
 1. **Safety Risks:** Students may fly in conditions beyond their training level
@@ -103,10 +104,12 @@ Flight Schedule Pro **automatically** handles weather conflicts:
 6. Instructor ranks: 1st choice (Thu 10am), 2nd (Wed 2pm), 3rd (Fri 3pm)
 7. System selects Thu 10am (instructor's 1st choice, student's 2nd)
 8. Notification sent: "Flight rescheduled to Thu 10am - instructor's preference"
-9. Student accepts, lesson confirmed
+9. Student confirms reschedule
 10. System re-validates weather before final confirmation
+11. **If weather is invalid:** AI automatically regenerates new options, clears old preferences, sends new notifications
+12. **If weather is valid:** Booking confirmed with RESCHEDULED status
 
-**Result:** Problem solved in 15 minutes with 2 interactions per person
+**Result:** Problem solved in 15 minutes with 2 interactions per person, or automatically handled if weather changes
 
 #### Journey 2: Deadline Enforcement
 1. Weather conflict detected Saturday morning
