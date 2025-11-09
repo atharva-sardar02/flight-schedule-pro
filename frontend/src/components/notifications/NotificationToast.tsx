@@ -75,19 +75,29 @@ export function NotificationToast() {
 
   const handleClick = async () => {
     if (currentNotification) {
-      await markAsRead(currentNotification.id);
+      try {
+        await markAsRead(currentNotification.id);
+      } catch (err) {
+        console.warn('Failed to mark notification as read:', err);
+        // Continue with navigation even if marking as read fails
+      }
+      
+      // Close toast first
+      setShowToast(false);
+      setCurrentNotification(null);
       
       // Navigate to reschedule page if it's a reschedule notification
       // Route is /bookings/:bookingId/reschedule (HashRouter compatible)
-      if (currentNotification.bookingId && currentNotification.type === 'OPTIONS_AVAILABLE') {
-        navigate(`/bookings/${currentNotification.bookingId}/reschedule`);
-      } else if (currentNotification.bookingId) {
-        // For other notification types, go to booking details
-        navigate(`/bookings/${currentNotification.bookingId}`);
-      }
+      // Use setTimeout to ensure toast closes before navigation
+      setTimeout(() => {
+        if (currentNotification.bookingId && currentNotification.type === 'OPTIONS_AVAILABLE') {
+          navigate(`/bookings/${currentNotification.bookingId}/reschedule`);
+        } else if (currentNotification.bookingId) {
+          // For other notification types, go to booking details
+          navigate(`/bookings/${currentNotification.bookingId}`);
+        }
+      }, 100);
     }
-    setShowToast(false);
-    setCurrentNotification(null);
   };
 
   if (!showToast || !currentNotification) {
