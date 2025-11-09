@@ -94,6 +94,14 @@ export async function requireAuth(
           updatedAt: userRow.updated_at,
         };
       }
+    } catch (dbError: any) {
+      // If database table doesn't exist or query fails, use Cognito user info
+      logger.warn('Database lookup failed, using Cognito user info', { 
+        error: dbError.message,
+        cognitoUserId: cognitoUser.id,
+        path: event.path
+      });
+      user = cognitoUser;
     }
 
     logger.info('User authenticated', {

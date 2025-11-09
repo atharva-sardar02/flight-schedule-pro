@@ -427,45 +427,6 @@ async function handleGetCurrentUser(
         headers,
         body: JSON.stringify({ user }),
       };
-    }
-
-    // Look up database user ID using Cognito user ID
-    try {
-      const pool = getDbPool();
-      const dbUser = await pool.query(
-        'SELECT id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at FROM users WHERE cognito_user_id = $1',
-        [cognitoUser.id]
-      );
-
-      if (dbUser.rows.length === 0) {
-        // User exists in Cognito but not in database - return Cognito user info
-        logger.warn('User found in Cognito but not in database', { cognitoUserId: cognitoUser.id });
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ user: cognitoUser }),
-        };
-      }
-
-      // Return user with database ID
-      const userRow = dbUser.rows[0];
-      const user = {
-        id: userRow.id, // Use database ID, not Cognito ID
-        email: userRow.email,
-        firstName: userRow.first_name,
-        lastName: userRow.last_name,
-        phoneNumber: userRow.phone_number,
-        role: userRow.role,
-        trainingLevel: userRow.training_level,
-        createdAt: userRow.created_at,
-        updatedAt: userRow.updated_at,
-      };
-
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ user }),
-      };
     } catch (dbError: any) {
       // If database table doesn't exist, return Cognito user info
       logger.warn('Database lookup failed, using Cognito user info', { 
