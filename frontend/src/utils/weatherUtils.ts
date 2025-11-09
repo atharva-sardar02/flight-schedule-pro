@@ -101,9 +101,9 @@ export function formatWind(speed: number, direction?: number): string {
  * Get cardinal wind direction
  */
 export function getWindDirection(degrees: number): string {
-  const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+  const directions: string[] = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
   const index = Math.round((degrees % 360) / 22.5);
-  return directions[index % 16];
+  return directions[index % 16] || 'N';
 }
 
 /**

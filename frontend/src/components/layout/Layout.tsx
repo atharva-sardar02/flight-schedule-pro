@@ -86,7 +86,7 @@ export function Layout({ children }: LayoutProps) {
             {/* User Menu */}
             <div className="hidden md:flex items-center gap-3">
               <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{user?.name}</p>
+                <p className="text-sm font-medium text-gray-900">{user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email}</p>
                 <p className="text-xs text-gray-600">{user?.role}</p>
               </div>
               <Button
@@ -138,7 +138,7 @@ export function Layout({ children }: LayoutProps) {
               })}
               <div className="pt-3 border-t">
                 <div className="px-4 py-2">
-                  <p className="text-sm font-medium text-gray-900">{user?.name}</p>
+                  <p className="text-sm font-medium text-gray-900">{user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email}</p>
                   <p className="text-xs text-gray-600">{user?.role}</p>
                 </div>
                 <button

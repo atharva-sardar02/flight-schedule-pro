@@ -129,8 +129,10 @@ export default function ReschedulePage() {
     }
   };
 
-  const handleConfirmReschedule = async () => {
-    if (!bookingId || !selectedOption) return;
+  const handleConfirmReschedule = async (): Promise<{ success: boolean; error?: string; requiresNewOptions?: boolean }> => {
+    if (!bookingId || !selectedOption) {
+      return { success: false, error: 'Missing booking ID or selected option' };
+    }
 
     try {
       setSubmitting(true);
@@ -140,18 +142,22 @@ export default function ReschedulePage() {
       if (result.success) {
         // Navigate back to booking details
         navigate(`/bookings/${bookingId}`);
+        return { success: true };
       } else {
         if (result.requiresNewOptions) {
           setError(result.error || 'Weather conditions have changed. Please generate new options.');
           setStep('options');
+          return { success: false, error: result.error, requiresNewOptions: true };
         } else {
           setError(result.error || 'Failed to confirm reschedule');
+          return { success: false, error: result.error };
         }
       }
     } catch (err: any) {
       const friendlyError = getUserFriendlyError(err);
       setError(friendlyError.message);
       showErrorNotification(err, 'confirm-reschedule');
+      return { success: false, error: friendlyError.message };
     } finally {
       setSubmitting(false);
     }
@@ -268,14 +274,16 @@ export default function ReschedulePage() {
         <ConfirmationScreen
           bookingDetails={{
             id: booking.id,
-            departureAirport: booking.departureAirport,
-            arrivalAirport: booking.arrivalAirport,
+            studentName: 'Student', // TODO: Load from booking.studentId
+            instructorName: 'Instructor', // TODO: Load from booking.instructorId
+            aircraftType: booking.aircraftId || 'Aircraft', // TODO: Load from booking.aircraftId
+            trainingLevel: booking.trainingLevel || 'student_pilot',
           }}
           oldScheduledTime={booking.scheduledDatetime}
           newScheduledTime={selectedOption.suggestedDatetime}
           route={{
-            departure: booking.departureAirport,
-            arrival: booking.arrivalAirport,
+            departureAirport: booking.departureAirport,
+            arrivalAirport: booking.arrivalAirport,
           }}
           onConfirm={handleConfirmReschedule}
           onCancel={() => setStep('preferences')}

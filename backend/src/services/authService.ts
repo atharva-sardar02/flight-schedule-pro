@@ -51,8 +51,8 @@ export class AuthService {
    * Login user with email and password
    */
   static async login(credentials: LoginRequest): Promise<AuthTokens> {
-    // Mock authentication for local development
-    if (process.env.NODE_ENV === 'development' && process.env.MOCK_AUTH === 'true') {
+    // Mock authentication for testing (when MOCK_AUTH is enabled)
+    if (process.env.MOCK_AUTH === 'true') {
       logger.info('Using mock authentication for local development', { email: credentials.email });
       
       // Generate mock tokens (simple base64 encoded JSON)
@@ -106,8 +106,8 @@ export class AuthService {
    * Register new user
    */
   static async register(data: RegisterRequest): Promise<{ userId: string; email: string }> {
-    // Mock registration for local development
-    if (process.env.NODE_ENV === 'development' && process.env.MOCK_AUTH === 'true') {
+    // Mock registration for testing (when MOCK_AUTH is enabled)
+    if (process.env.MOCK_AUTH === 'true') {
       logger.info('Using mock registration for local development', { email: data.email });
       
       // Generate a mock user ID
@@ -181,7 +181,7 @@ export class AuthService {
    */
   static async verifyToken(accessToken: string): Promise<User> {
     // Mock token verification for local development
-    if (process.env.NODE_ENV === 'development' && process.env.MOCK_AUTH === 'true') {
+    if (process.env.MOCK_AUTH === 'true') {
       if (accessToken.startsWith('mock.')) {
         try {
           // Extract the base64 part from mock token

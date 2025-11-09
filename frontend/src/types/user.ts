@@ -19,6 +19,7 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
+  name?: string; // Computed or optional name field
   phoneNumber?: string;
   role: UserRole;
   trainingLevel?: TrainingLevel;

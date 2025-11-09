@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { Layout } from './components/layout/Layout';
@@ -151,11 +151,11 @@ function App() {
                 }
               />
 
-              {/* Home page - redirect to dashboard if authenticated, otherwise to login */}
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              {/* Home page - redirect to login (will redirect to dashboard if authenticated via ProtectedRoute) */}
+              <Route path="/" element={<Navigate to="/login" replace />} />
 
-              {/* Catch-all route */}
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              {/* Catch-all route - redirect to login */}
+              <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
           </div>
         </Router>

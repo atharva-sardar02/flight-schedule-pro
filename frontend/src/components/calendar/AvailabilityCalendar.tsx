@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from '../ui/alert';
 import { Calendar, List, Clock } from 'lucide-react';
 import BookingService from '../../services/booking';
 import { Booking } from '../../types/booking';
+import { UserRole } from '../../types/user';
 
 export const AvailabilityCalendar: React.FC = () => {
   const { user } = useAuth();
@@ -52,7 +53,7 @@ export const AvailabilityCalendar: React.FC = () => {
       let bookingData: Booking[] = [];
       
       // Load bookings based on user role
-      if (user.role === 'INSTRUCTOR' || user.role === 'instructor') {
+      if (user.role === UserRole.INSTRUCTOR) {
         // For instructors, show bookings where they are the instructor
         bookingData = await BookingService.listBookings({
           instructorId: user.id,
@@ -60,7 +61,7 @@ export const AvailabilityCalendar: React.FC = () => {
           endDate: dateRange.endDate,
           limit: 1000, // Load all bookings in range
         });
-      } else if (user.role === 'STUDENT' || user.role === 'student') {
+      } else if (user.role === UserRole.STUDENT) {
         // For students, show bookings where they are the student
         bookingData = await BookingService.listBookings({
           studentId: user.id,

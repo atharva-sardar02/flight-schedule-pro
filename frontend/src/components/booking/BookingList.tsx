@@ -8,6 +8,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import BookingService from '../../services/booking';
 import { Booking, BookingStatus, BookingListFilters } from '../../types/booking';
 import { TrainingLevel } from '../../types/weather';
+import { UserRole } from '../../types/user';
 import { BookingsCalendar } from './BookingsCalendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Calendar, List } from 'lucide-react';
@@ -62,9 +63,9 @@ export default function BookingList() {
       
       // If user is a student, filter by studentId
       // If user is an instructor, filter by instructorId
-      if (user.role === 'STUDENT' || user.role === 'student') {
+      if (user.role === UserRole.STUDENT) {
         userFilters.studentId = user.id;
-      } else if (user.role === 'INSTRUCTOR' || user.role === 'instructor') {
+      } else if (user.role === UserRole.INSTRUCTOR) {
         userFilters.instructorId = user.id;
       }
       // Admins can see all bookings (no filter)

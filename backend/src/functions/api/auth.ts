@@ -152,7 +152,7 @@ async function handleLogin(
     let user;
     
     // Skip database lookup for mock auth
-    if (process.env.NODE_ENV === 'development' && process.env.MOCK_AUTH === 'true') {
+    if (process.env.MOCK_AUTH === 'true') {
       // Use Cognito user info directly for mock auth
       user = cognitoUser;
       logger.info('Using mock auth - skipping database lookup', { email: cognitoUser.email });
@@ -264,7 +264,7 @@ async function handleRegister(
     const result = await AuthService.register(data);
 
     // Create user record in database (skip for mock auth)
-    if (!(process.env.NODE_ENV === 'development' && process.env.MOCK_AUTH === 'true')) {
+    if (process.env.MOCK_AUTH !== 'true') {
       try {
         const pool = getDbPool();
         const client = await pool.connect();
@@ -404,7 +404,7 @@ async function handleGetCurrentUser(
     const cognitoUser = await AuthService.verifyToken(token);
 
     // Skip database lookup for mock auth
-    if (process.env.NODE_ENV === 'development' && process.env.MOCK_AUTH === 'true') {
+    if (process.env.MOCK_AUTH === 'true') {
       return {
         statusCode: 200,
         headers,

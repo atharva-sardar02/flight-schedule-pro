@@ -22,8 +22,9 @@ Set-Location $frontendDir
 
 # Create production environment file
 Write-Host "Creating .env.production..."
-"VITE_API_BASE_URL=http://$EC2IP:3001" | Out-File -FilePath .env.production -Encoding utf8
-Write-Host "✅ Environment file created"
+$envContent = "VITE_API_BASE_URL=http://${EC2IP}:3001"
+Set-Content -Path .env.production -Value $envContent -Encoding utf8 -NoNewline
+Write-Host "✅ Environment file created: $envContent"
 
 # Build frontend
 Write-Host ""
