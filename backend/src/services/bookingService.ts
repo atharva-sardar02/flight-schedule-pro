@@ -133,6 +133,19 @@ export class BookingService {
         endDate: dateStr,
       });
 
+      logger.info('Student availability check', {
+        userId: data.studentId,
+        dateStr,
+        timeStr,
+        totalSlots: studentAvailability.slots.length,
+        slots: studentAvailability.slots.map(s => ({
+          date: s.date instanceof Date ? s.date.toISOString() : s.date,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          isAvailable: s.isAvailable,
+        })),
+      });
+
       const studentAvailable = studentAvailability.slots.some((slot) => {
         // Format slot date using local timezone to match booking date formatting
         // slot.date might be a Date object or a string (YYYY-MM-DD)
