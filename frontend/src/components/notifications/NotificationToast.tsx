@@ -67,10 +67,28 @@ export function NotificationToast() {
 
   const handleClose = async () => {
     if (currentNotification) {
-      await markAsRead(currentNotification.id);
+      try {
+        await markAsRead(currentNotification.id);
+      } catch (err) {
+        console.warn('Failed to mark notification as read:', err);
+      }
     }
     setShowToast(false);
     setCurrentNotification(null);
+    
+    // After closing, check if there are more unread notifications
+    setTimeout(async () => {
+      try {
+        const allNotifications = await fetchNotifications();
+        const unread = allNotifications.filter(n => !n.read);
+        if (unread.length > 0) {
+          setCurrentNotification(unread[0]);
+          setShowToast(true);
+        }
+      } catch (err) {
+        console.debug('Failed to fetch next notification:', err);
+      }
+    }, 500);
   };
 
   const handleClick = async () => {
@@ -82,6 +100,10 @@ export function NotificationToast() {
         // Continue with navigation even if marking as read fails
       }
       
+      // Store bookingId before clearing currentNotification
+      const bookingId = currentNotification.bookingId;
+      const notificationType = currentNotification.type;
+      
       // Close toast first
       setShowToast(false);
       setCurrentNotification(null);
@@ -90,13 +112,27 @@ export function NotificationToast() {
       // Route is /bookings/:bookingId/reschedule (HashRouter compatible)
       // Use setTimeout to ensure toast closes before navigation
       setTimeout(() => {
-        if (currentNotification.bookingId && currentNotification.type === 'OPTIONS_AVAILABLE') {
-          navigate(`/bookings/${currentNotification.bookingId}/reschedule`);
-        } else if (currentNotification.bookingId) {
+        if (bookingId && notificationType === 'OPTIONS_AVAILABLE') {
+          navigate(`/bookings/${bookingId}/reschedule`);
+        } else if (bookingId) {
           // For other notification types, go to booking details
-          navigate(`/bookings/${currentNotification.bookingId}`);
+          navigate(`/bookings/${bookingId}`);
         }
       }, 100);
+      
+      // After navigation, check if there are more unread notifications
+      setTimeout(async () => {
+        try {
+          const allNotifications = await fetchNotifications();
+          const unread = allNotifications.filter(n => !n.read);
+          if (unread.length > 0) {
+            setCurrentNotification(unread[0]);
+            setShowToast(true);
+          }
+        } catch (err) {
+          console.debug('Failed to fetch next notification:', err);
+        }
+      }, 1000);
     }
   };
 
