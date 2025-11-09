@@ -280,3 +280,4 @@ Get-Content response.json
 
 **Once all 3 functions are configured, your backend is fully deployed!** 🚀
 
+

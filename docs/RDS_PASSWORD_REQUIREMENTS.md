@@ -50,3 +50,4 @@ Example:
 DB_MASTER_PASSWORD=MySecureDemo123!
 ```
 
+

@@ -71,3 +71,4 @@ For `functions.api.auth.handler`:
    aws lambda update-function-code --function-name flight-schedule-pro-staging-api --s3-bucket flight-schedule-pro-lambda-code --s3-key staging/lambda-code.zip --region us-east-1
    ```
 
+

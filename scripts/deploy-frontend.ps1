@@ -32,20 +32,43 @@ Write-Host "Building frontend..."
 npm run build
 Write-Host "✅ Build complete"
 
+# Check if dist folder exists
+if (-not (Test-Path "dist")) {
+    Write-Host "❌ Error: dist folder not found. Build may have failed." -ForegroundColor Red
+    exit 1
+}
+
 # Upload to S3
 Write-Host ""
 Write-Host "Uploading to S3..."
-aws s3 sync dist/ "s3://$S3Bucket" --delete
+$syncResult = aws s3 sync dist/ "s3://$S3Bucket" --delete 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ Error uploading to S3:" -ForegroundColor Red
+    Write-Host $syncResult
+    exit 1
+}
 Write-Host "✅ Upload complete"
 
-# Set proper content types
+# Set proper content types (only if file exists)
 Write-Host ""
 Write-Host "Setting content types..."
-aws s3 cp "s3://$S3Bucket/index.html" "s3://$S3Bucket/index.html" --content-type "text/html" --metadata-directive REPLACE
+$cpResult = aws s3 cp "s3://$S3Bucket/index.html" "s3://$S3Bucket/index.html" --content-type "text/html" --metadata-directive REPLACE 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "⚠️  Warning: Could not set content type for index.html (file may not exist yet)" -ForegroundColor Yellow
+    Write-Host $cpResult
+}
 
-# Get region
-$region = (aws s3api get-bucket-location --bucket $S3Bucket --query LocationConstraint --output text)
-if ($region -eq "None") {
+# Get region (with error handling)
+Write-Host ""
+Write-Host "Getting bucket region..."
+$regionResult = aws s3api get-bucket-location --bucket $S3Bucket --query LocationConstraint --output text 2>&1
+if ($LASTEXITCODE -eq 0 -and $regionResult) {
+    $region = $regionResult
+    if ($region -eq "None" -or $region -eq "") {
+        $region = "us-east-1"
+    }
+} else {
+    Write-Host "⚠️  Warning: Could not determine bucket region, defaulting to us-east-1" -ForegroundColor Yellow
     $region = "us-east-1"
 }
 

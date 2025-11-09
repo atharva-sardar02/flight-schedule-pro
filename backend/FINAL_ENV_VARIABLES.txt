@@ -15,3 +15,4 @@ WEATHERAPI_API_KEY_SECRET_ARN = arn:aws:secretsmanager:us-east-1:971422717446:se
 SES_REGION = us-east-1
 LOG_LEVEL = info
 
+

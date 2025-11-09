@@ -69,3 +69,4 @@ Write-Host "1. Go to Lambda Console" -ForegroundColor White
 Write-Host "2. Check each function's Environment variables" -ForegroundColor White
 Write-Host "3. All should have 12 variables set`n" -ForegroundColor White
 
+

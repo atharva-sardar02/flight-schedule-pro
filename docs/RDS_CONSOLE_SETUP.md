@@ -104,3 +104,4 @@ Once RDS is created:
 - Ensure inbound rule allows port 5432 from 0.0.0.0/0
 - Check RDS instance shows "Publicly accessible: Yes"
 
+

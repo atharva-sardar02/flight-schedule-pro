@@ -31,3 +31,4 @@ Get-Item lambda-package.zip | Select-Object Name, @{Name="Size(MB)";Expression={
 # Step 9: Clean up temporary directory (optional)
 Remove-Item -Recurse -Force lambda-package
 
+

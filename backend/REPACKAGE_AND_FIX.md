@@ -82,3 +82,4 @@ aws s3 cp s3://flight-schedule-pro-lambda-code/staging/lambda-code.zip C:\temp\c
 cd D:\gauntlet-ai\flight-schedule-pro\backend; Remove-Item "lambda-package","lambda-package.zip" -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Path lambda-package -Force | Out-Null; Copy-Item -Path "dist\*" -Destination "lambda-package\" -Recurse -Force; Copy-Item -Path "node_modules" -Destination "lambda-package\node_modules" -Recurse -Force; Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory("lambda-package", "lambda-package.zip"); Write-Host "Package recreated. Now upload to S3." -ForegroundColor Green
 ```
 
+

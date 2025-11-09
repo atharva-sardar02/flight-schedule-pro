@@ -83,3 +83,4 @@ echo "2. Add CORS_ALLOWED_ORIGINS to backend .env: http://$BUCKET_NAME.s3-websit
 echo "3. Restart backend: pm2 restart flight-api"
 echo ""
 
+
