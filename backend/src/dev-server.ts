@@ -136,7 +136,76 @@ app.get('/test-health', async (req, res) => {
   }
 });
 
-// Test route: Root path through auth handler (simulates API Gateway behavior)
+// Temporary endpoint to sync user from Cognito to database
+app.post('/api/users/sync/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const pool = getDbPool();
+    
+    // Get user from Cognito
+    const { AdminGetUserCommand } = await import('@aws-sdk/client-cognito-identity-provider');
+    const { CognitoIdentityProviderClient } = await import('@aws-sdk/client-cognito-identity-provider');
+    const cognitoClient = new CognitoIdentityProviderClient({
+      region: process.env.AWS_REGION || 'us-east-1',
+    });
+    
+    const command = new AdminGetUserCommand({
+      UserPoolId: process.env.COGNITO_USER_POOL_ID!,
+      Username: email,
+    });
+    
+    const cognitoUser = await cognitoClient.send(command);
+    
+    if (!cognitoUser.Username) {
+      return res.status(404).json({ error: 'User not found in Cognito' });
+    }
+    
+    // Check if user already exists in database
+    const existing = await pool.query(
+      'SELECT id FROM users WHERE email = $1 OR cognito_user_id = $2',
+      [email, cognitoUser.Username]
+    );
+    
+    if (existing.rows.length > 0) {
+      return res.json({ 
+        message: 'User already exists in database',
+        userId: existing.rows[0].id 
+      });
+    }
+    
+    // Extract attributes
+    const attributes = cognitoUser.UserAttributes || [];
+    const getAttr = (name: string) => attributes.find((attr) => attr.Name === name)?.Value;
+    
+    // Insert into database
+    const result = await pool.query(
+      `INSERT INTO users (cognito_user_id, email, first_name, last_name, phone_number, role, training_level, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+       RETURNING id, email, role, first_name, last_name`,
+      [
+        cognitoUser.Username,
+        email,
+        getAttr('given_name') || 'User',
+        getAttr('family_name') || 'Name',
+        getAttr('phone_number') || null,
+        'STUDENT', // Default role, you may need to get from groups
+        null,
+      ]
+    );
+    
+    res.json({ 
+      message: 'User synced to database',
+      user: result.rows[0]
+    });
+  } catch (error) {
+    logger.error('Sync user error:', error);
+    res.status(500).json({ 
+      error: 'Failed to sync user', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
 // Temporary endpoint to list users (for testing)
 app.get('/api/users/list', async (_req, res) => {
   try {
