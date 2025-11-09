@@ -617,32 +617,7 @@ app.use('/preferences/:action?/:bookingId?', async (req, res) => {
 });
 
 // Notifications Routes
-app.get('/notifications', requireAuth, async (req: any, res) => {
-  try {
-    logger.info('Notifications endpoint hit', { userId: req.user?.id });
-    const pool = getDbPool();
-    const notifier = new InAppNotifier(pool);
-    const notifications = await notifier.getNotifications(req.user.id, 50);
-    logger.info('Notifications retrieved', { userId: req.user.id, count: notifications.length });
-    res.json(notifications);
-  } catch (error: any) {
-    logger.error('Get notifications error:', error);
-    res.status(500).json({ error: 'Failed to get notifications', message: error.message });
-  }
-});
-
-app.get('/notifications/unread', requireAuth, async (req: any, res) => {
-  try {
-    const pool = getDbPool();
-    const notifier = new InAppNotifier(pool);
-    const notifications = await notifier.getUnreadNotifications(req.user.id);
-    res.json(notifications);
-  } catch (error: any) {
-    logger.error('Get unread notifications error:', error);
-    res.status(500).json({ error: 'Failed to get unread notifications', message: error.message });
-  }
-});
-
+// IMPORTANT: Define more specific routes FIRST to avoid route matching issues
 app.get('/notifications/unread/count', requireAuth, async (req: any, res) => {
   try {
     logger.info('Notifications unread count endpoint hit', { userId: req.user?.id });
@@ -654,6 +629,34 @@ app.get('/notifications/unread/count', requireAuth, async (req: any, res) => {
   } catch (error: any) {
     logger.error('Get unread count error:', error);
     res.status(500).json({ error: 'Failed to get unread count', message: error.message });
+  }
+});
+
+app.get('/notifications/unread', requireAuth, async (req: any, res) => {
+  try {
+    logger.info('Notifications unread endpoint hit', { userId: req.user?.id });
+    const pool = getDbPool();
+    const notifier = new InAppNotifier(pool);
+    const notifications = await notifier.getUnreadNotifications(req.user.id);
+    logger.info('Unread notifications retrieved', { userId: req.user.id, count: notifications.length });
+    res.json(notifications);
+  } catch (error: any) {
+    logger.error('Get unread notifications error:', error);
+    res.status(500).json({ error: 'Failed to get unread notifications', message: error.message });
+  }
+});
+
+app.get('/notifications', requireAuth, async (req: any, res) => {
+  try {
+    logger.info('Notifications endpoint hit', { userId: req.user?.id });
+    const pool = getDbPool();
+    const notifier = new InAppNotifier(pool);
+    const notifications = await notifier.getNotifications(req.user.id, 50);
+    logger.info('Notifications retrieved', { userId: req.user.id, count: notifications.length });
+    res.json(notifications);
+  } catch (error: any) {
+    logger.error('Get notifications error:', error);
+    res.status(500).json({ error: 'Failed to get notifications', message: error.message });
   }
 });
 
